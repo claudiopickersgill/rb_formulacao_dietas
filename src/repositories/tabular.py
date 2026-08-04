@@ -85,7 +85,10 @@ class TabularRepository(Repository):
 
     def list_users(self) -> pd.DataFrame:
         frame = self._normalized("usuarios")
-        return frame.sort_values("nome", na_position="last").reset_index(drop=True)
+        # O hash é necessário apenas no fluxo interno de autenticação e nunca
+        # deve ser exibido na interface administrativa.
+        visible = frame.drop(columns=["password_hash"], errors="ignore")
+        return visible.sort_values("nome", na_position="last").reset_index(drop=True)
 
     def get_user_by_email(self, email: str) -> dict[str, Any] | None:
         frame = self._normalized("usuarios")
@@ -109,7 +112,7 @@ class TabularRepository(Repository):
         if not data["email"]:
             raise ValueError("O email do usuário é obrigatório.")
 
-        current = self._normalized("usuarios")
+        current = self._normalized("usuarios").astype(object)
         id_mask = current["user_id"].astype(str).eq(data["user_id"])
         email_mask = current["email"].map(normalize_text).eq(normalize_text(data["email"]))
         mask = id_mask | email_mask
@@ -118,6 +121,10 @@ class TabularRepository(Repository):
             idx = current.index[mask][0]
             data["user_id"] = str(current.at[idx, "user_id"] or data["user_id"])
             data["created_at"] = str(current.at[idx, "created_at"] or data["created_at"])
+            # Ao editar nome, perfil ou status sem preencher uma nova senha,
+            # preserva o hash já cadastrado.
+            if not str(data.get("password_hash") or "").strip():
+                data["password_hash"] = str(current.at[idx, "password_hash"] or "")
             for col in USER_COLUMNS:
                 current.at[idx, col] = data[col]
         else:

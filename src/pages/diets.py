@@ -94,7 +94,7 @@ def render(repository: Repository, user: User) -> None:
     on_click=go_to,
     args=("Nova formulação",),
     kwargs={"frm_load_bundle": bundle},
-    )
+)
 
     can_modify = user.can_edit and (
         user.is_admin or str(metadata.get("proprietario", "")).lower() == user.email.lower()

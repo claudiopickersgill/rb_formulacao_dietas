@@ -6,6 +6,7 @@ import streamlit as st
 
 from .models import User
 from .repositories.base import Repository
+from .security import has_password, verify_password
 from .utils import as_bool, normalize_text
 
 
@@ -59,38 +60,68 @@ def _authenticate_oidc(repository: Repository, settings: Mapping[str, Any]) -> U
         st.stop()
 
     _touch_once(repository, email)
-    return User(
-        user_id=str(record.get("user_id", "")),
-        email=email,
-        nome=str(record.get("nome") or name),
-        perfil=str(record.get("perfil") or "Consulta"),
-        ativo=True,
-    )
+    return _user_from_record(record, email=email, fallback_name=name)
 
 
 def _authenticate_local(repository: Repository, settings: Mapping[str, Any]) -> User:
-    default_email = str(settings.get("local_email", "admin@local"))
+    """Autentica o administrador bootstrap ou usuários de ``rb_usuarios``.
+
+    O par ``local_email``/``local_password`` continua funcionando como acesso
+    administrativo de recuperação. Os demais usuários são validados pelo hash
+    individual salvo na tabela de usuários.
+    """
+    default_email = str(settings.get("local_email", "admin@local")).strip().lower()
     default_password = str(settings.get("local_password", "admin"))
 
     if not st.session_state.get("local_authenticated", False):
-        st.title("Formulação RB — modo local")
-        st.info("Este login é apenas para desenvolvimento. No ambiente online, use OIDC/Google.")
+        st.title("Formulação RB")
+        st.write("Entre com seu email e senha para acessar o sistema.")
         with st.form("local_login"):
             email = st.text_input("Email", value=default_email)
             password = st.text_input("Senha", type="password")
             submit = st.form_submit_button("Entrar", type="primary", width="stretch")
+
         if submit:
-            if normalize_text(email) == normalize_text(default_email) and password == default_password:
-                st.session_state["local_authenticated"] = True
-                st.session_state["local_email"] = email.strip().lower()
-                st.rerun()
+            normalized_email = str(email or "").strip().lower()
+            record = repository.get_user_by_email(normalized_email)
+            is_bootstrap_admin = (
+                normalize_text(normalized_email) == normalize_text(default_email)
+                and password == default_password
+            )
+
+            if record is not None and not as_bool(record.get("ativo"), True):
+                st.error("Seu usuário está inativo. Procure um administrador.")
+            elif is_bootstrap_admin:
+                if record is None:
+                    record = repository.upsert_user(
+                        {
+                            "email": normalized_email,
+                            "nome": str(settings.get("local_name", "Administrador local")),
+                            "perfil": "Administrador",
+                            "ativo": True,
+                        },
+                        actor=normalized_email,
+                    )
+                _start_local_session(normalized_email)
+            elif record is None:
+                st.error("Email ou senha incorretos.")
+            elif not has_password(record.get("password_hash")):
+                st.error(
+                    "Este usuário está cadastrado, mas ainda não possui uma senha. "
+                    "Peça a um administrador para definir uma senha no painel de usuários."
+                )
+            elif verify_password(password, str(record.get("password_hash") or "")):
+                _start_local_session(normalized_email)
             else:
                 st.error("Email ou senha incorretos.")
         st.stop()
 
     email = str(st.session_state.get("local_email", default_email)).strip().lower()
     record = repository.get_user_by_email(email)
-    if record is None:
+
+    # Compatibilidade com instalações antigas: o administrador configurado nos
+    # segredos é criado automaticamente na primeira entrada.
+    if record is None and normalize_text(email) == normalize_text(default_email):
         record = repository.upsert_user(
             {
                 "email": email,
@@ -100,23 +131,48 @@ def _authenticate_local(repository: Repository, settings: Mapping[str, Any]) -> 
             },
             actor=email,
         )
+
+    if record is None:
+        _clear_local_session()
+        st.error("O usuário desta sessão não existe mais.")
+        st.stop()
+
+    if not as_bool(record.get("ativo"), True):
+        _clear_local_session()
+        st.error("Seu usuário está inativo. Procure um administrador.")
+        st.stop()
+
     _touch_once(repository, email)
-    return User(
-        user_id=str(record.get("user_id", "")),
-        email=email,
-        nome=str(record.get("nome") or "Administrador local"),
-        perfil=str(record.get("perfil") or "Administrador"),
-        ativo=True,
-    )
+    return _user_from_record(record, email=email, fallback_name="Usuário")
 
 
 def logout(mode: str) -> None:
     if str(mode).lower() == "oidc":
         st.logout()
     else:
-        st.session_state.pop("local_authenticated", None)
-        st.session_state.pop("local_email", None)
+        _clear_local_session()
         st.rerun()
+
+
+def _start_local_session(email: str) -> None:
+    st.session_state["local_authenticated"] = True
+    st.session_state["local_email"] = email.strip().lower()
+    st.rerun()
+
+
+def _clear_local_session() -> None:
+    st.session_state.pop("local_authenticated", None)
+    st.session_state.pop("local_email", None)
+
+
+def _user_from_record(record: Mapping[str, Any], email: str, fallback_name: str) -> User:
+    return User(
+        user_id=str(record.get("user_id", "")),
+        email=email,
+        nome=str(record.get("nome") or fallback_name),
+        perfil=str(record.get("perfil") or "Consulta"),
+        ativo=True,
+    )
 
 
 def _touch_once(repository: Repository, email: str) -> None:

@@ -61,6 +61,7 @@ USER_COLUMNS = [
     "nome",
     "perfil",
     "ativo",
+    "password_hash",
     "created_at",
     "updated_at",
     "last_login",

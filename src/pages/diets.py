@@ -87,14 +87,13 @@ def render(repository: Repository, user: User) -> None:
         st.json({key: value for key, value in metadata.items() if key not in {"descricao"}})
 
     actions = st.columns(4)
-    if actions[0].button(
+    actions[0].button(
     "Continuar editando",
     type="primary",
     width="stretch",
     on_click=go_to,
     args=("Nova formulação",),
-    kwargs={"frm_load_bundle": bundle},
-)
+    kwargs={"frm_load_bundle": bundle},)
 
     can_modify = user.can_edit and (
         user.is_admin or str(metadata.get("proprietario", "")).lower() == user.email.lower()

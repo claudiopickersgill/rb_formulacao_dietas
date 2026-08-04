@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from typing import Any
 
 
 APP_CSS = """
@@ -26,6 +27,8 @@ def page_header(title: str, subtitle: str = "") -> None:
         st.markdown(f'<div class="rb-subtitle">{subtitle}</div>', unsafe_allow_html=True)
 
 
-def go_to(page: str) -> None:
+def go_to(page: str, **state_updates: Any) -> None:
+    for key, value in state_updates.items():
+        st.session_state[key] = value
+
     st.session_state["page"] = page
-    st.rerun()

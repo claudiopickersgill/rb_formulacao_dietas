@@ -26,12 +26,28 @@ def render(repository: Repository, user: User) -> None:
 
     st.subheader("Ações rápidas")
     a1, a2, a3 = st.columns(3)
-    if a1.button("Nova formulação", type="primary", width="stretch"):
-        go_to("Nova formulação")
-    if a2.button("Cadastrar ingrediente", width="stretch"):
-        go_to("Ingredientes")
-    if a3.button("Abrir dietas salvas", width="stretch"):
-        go_to("Dietas salvas")
+
+    a1.button(
+        "Nova formulação",
+        type="primary",
+        width="stretch",
+        on_click=go_to,
+        args=("Nova formulação",),
+    )
+
+    a2.button(
+        "Cadastrar ingrediente",
+        width="stretch",
+        on_click=go_to,
+        args=("Ingredientes",),
+    )
+
+    a3.button(
+        "Abrir dietas salvas",
+        width="stretch",
+        on_click=go_to,
+        args=("Dietas salvas",),
+    )
 
     left, right = st.columns([1.2, 1])
     with left:

@@ -125,3 +125,11 @@ TABLE_SCHEMAS = {
     "dieta_restricoes": DIET_CONSTRAINT_COLUMNS,
     "auditoria": AUDIT_COLUMNS,
 }
+
+# Campos que representam data/hora e devem permanecer no fuso do aplicativo.
+TIMESTAMP_COLUMNS_BY_TABLE = {
+    "ingredientes": ["created_at", "updated_at"],
+    "usuarios": ["created_at", "updated_at", "last_login"],
+    "dietas": ["created_at", "updated_at"],
+    "auditoria": ["timestamp"],
+}

@@ -13,9 +13,10 @@ from ..config import (
     DIET_ITEM_COLUMNS,
     INGREDIENT_COLUMNS,
     TABLE_SCHEMAS,
+    TIMESTAMP_COLUMNS_BY_TABLE,
     USER_COLUMNS,
 )
-from ..utils import as_bool, new_id, normalize_text, utc_now_iso
+from ..utils import as_bool, local_now_iso, new_id, normalize_text, timestamp_to_local_iso
 from .base import Repository
 
 
@@ -34,6 +35,34 @@ class TabularRepository(Repository):
     def initialize(self) -> None:
         for name, columns in TABLE_SCHEMAS.items():
             self._ensure_table(name, columns)
+        self._normalize_stored_timestamps()
+
+    def _normalize_stored_timestamps(self) -> None:
+        """Converte datas existentes para o fuso do aplicativo.
+
+        A rotina é idempotente: só grava uma tabela quando algum valor muda.
+        Dessa forma, timestamps antigos em UTC são corrigidos uma única vez,
+        enquanto registros novos em America/Sao_Paulo permanecem inalterados.
+        """
+
+        for table_name, timestamp_columns in TIMESTAMP_COLUMNS_BY_TABLE.items():
+            frame = self._normalized(table_name)
+            if frame.empty:
+                continue
+
+            changed = False
+            normalized = frame.copy().astype(object)
+            for column in timestamp_columns:
+                if column not in normalized.columns:
+                    continue
+                converted = normalized[column].map(timestamp_to_local_iso)
+                original = normalized[column].fillna("").astype(str)
+                if not converted.fillna("").astype(str).equals(original):
+                    normalized[column] = converted
+                    changed = True
+
+            if changed:
+                self._write_table(table_name, normalized[TABLE_SCHEMAS[table_name]])
 
     def _normalized(self, name: str) -> pd.DataFrame:
         frame = self._read_table(name).copy()
@@ -50,7 +79,7 @@ class TabularRepository(Repository):
         return frame.sort_values(["tipo", "nome"], na_position="last").reset_index(drop=True)
 
     def upsert_ingredient(self, payload: dict[str, Any], actor: str) -> dict[str, Any]:
-        now = utc_now_iso()
+        now = local_now_iso()
         data = {col: payload.get(col, "") for col in INGREDIENT_COLUMNS}
         data["ingredient_id"] = str(payload.get("ingredient_id") or new_id("ing"))
         data["ativo"] = as_bool(payload.get("ativo"), True)
@@ -79,7 +108,7 @@ class TabularRepository(Repository):
         if not mask.any():
             raise KeyError(f"Ingrediente não encontrado: {ingredient_id}")
         current.loc[mask, "ativo"] = bool(active)
-        current.loc[mask, "updated_at"] = utc_now_iso()
+        current.loc[mask, "updated_at"] = local_now_iso()
         self._write_table("ingredientes", current)
         self.audit(actor, "ativar" if active else "inativar", "ingrediente", ingredient_id, "")
 
@@ -101,7 +130,7 @@ class TabularRepository(Repository):
         return frame.loc[mask].iloc[0].to_dict()
 
     def upsert_user(self, payload: dict[str, Any], actor: str) -> dict[str, Any]:
-        now = utc_now_iso()
+        now = local_now_iso()
         data = {col: payload.get(col, "") for col in USER_COLUMNS}
         data["user_id"] = str(payload.get("user_id") or new_id("usr"))
         data["email"] = str(payload.get("email") or "").strip().lower()
@@ -141,7 +170,7 @@ class TabularRepository(Repository):
             return
         mask = current["email"].map(normalize_text).eq(normalize_text(email))
         if mask.any():
-            current.loc[mask, "last_login"] = utc_now_iso()
+            current.loc[mask, "last_login"] = local_now_iso()
             self._write_table("usuarios", current)
 
     def list_diets(self, requester_email: str, requester_role: str) -> pd.DataFrame:
@@ -174,7 +203,7 @@ class TabularRepository(Repository):
         constraints: pd.DataFrame,
         actor: str,
     ) -> str:
-        now = utc_now_iso()
+        now = local_now_iso()
         diet_id = str(metadata.get("diet_id") or new_id("diet"))
         current_diets = self._normalized("dietas")
         existing = current_diets["diet_id"].astype(str).eq(diet_id)
@@ -256,7 +285,7 @@ class TabularRepository(Repository):
         audit = self._normalized("auditoria")
         row = {
             "audit_id": new_id("aud"),
-            "timestamp": utc_now_iso(),
+            "timestamp": local_now_iso(),
             "usuario": actor,
             "acao": action,
             "entidade": entity,

@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..config import INGREDIENT_COLUMNS, NUTRIENT_CODES, TABLE_SCHEMAS
 from ..google_connection import open_spreadsheet
-from ..utils import as_float, dataframe_for_storage, new_id
+from ..utils import as_float, dataframe_for_storage, local_now_iso, new_id
 from .tabular import TabularRepository
 
 T = TypeVar("T")
@@ -285,7 +285,7 @@ def _convert_legacy_ingredient_values(values: list[list[str]]) -> pd.DataFrame:
                 issues.append("NDT igual a zero; revisar se é dado ausente")
         quality.append("; ".join(issues))
 
-    now = pd.Timestamp.now(tz="UTC").isoformat()
+    now = local_now_iso()
     frame["ingredient_id"] = [new_id("ing") for _ in range(len(frame))]
     frame["ativo"] = True
     frame["qualidade_dados"] = quality

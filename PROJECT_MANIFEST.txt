@@ -1,0 +1,31 @@
+FORMULAÇÃO RB — VERSÃO GOOGLE SHEETS
+
+Entrada principal:
+- app.py
+
+Compatibilidade:
+- main.py
+- pages/conexao/conexao.py
+- pages/conexao/cria_df.py
+
+Integração:
+- src/google_connection.py
+- src/repositories/google_sheets.py
+- src/repositories/factory.py
+
+Configuração:
+- .streamlit/secrets.toml.example
+- requirements.txt
+
+Documentação:
+- README.md
+- INTEGRACAO_REALIZADA.md
+- docs/GOOGLE_SHEETS.md
+- DELIVERY_NOTES.md
+
+Testes:
+- tests/test_solver.py
+- tests/test_repository.py
+- tests/test_exports.py
+- tests/test_legacy_google_migration.py
+- tests/test_google_repository_integration.py

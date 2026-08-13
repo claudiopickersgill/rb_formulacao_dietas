@@ -1,0 +1,10 @@
+[project]
+name = "formulacao-rb"
+version = "0.1.0"
+description = "WebApp Streamlit para formulação de dietas de custo mínimo"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,2 @@
+user_id,email,nome,perfil,ativo,password_hash,created_at,updated_at,last_login
+usr_local_admin,admin@local,Administrador local,Administrador,True,,,,

@@ -11,10 +11,11 @@ from src.repositories.factory import build_repository
 from src.ui_helpers import inject_css
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+LOGO_PATH = PROJECT_ROOT / "assets" / "logo_rfb.png"
 
 st.set_page_config(
-    page_title="Formulação RB",
-    page_icon="🐄",
+    page_title="RFB | Diet Formulation System",
+    page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -38,7 +39,6 @@ def _secret_value(name: str, default: Any = "") -> Any:
 app_settings = _secret_section("app")
 google_settings = _secret_section("google_sheets")
 service_account = _secret_section("gcp_service_account")
-
 # Compatibilidade direta com o secrets.toml do repositório original.
 if not google_settings.get("spreadsheet_url"):
     google_settings["spreadsheet_url"] = str(_secret_value("private_gsheets_url", ""))
@@ -47,7 +47,6 @@ google_settings.setdefault("auto_migrate_legacy", True)
 google_settings.setdefault("legacy_worksheet_index", 0)
 google_settings.setdefault("cache_ttl_seconds", 60)
 google_settings.setdefault("max_retries", 5)
-
 repository_mode = str(
     app_settings.get(
         "repository",
@@ -103,9 +102,19 @@ if backfill_summary.get("executed") and not st.session_state.get("ingredient_bac
     st.session_state["ingredient_backfill_notified"] = True
 
 user = authenticate(repository, auth_mode, app_settings)
-
 with st.sidebar:
-    st.markdown("## 🐄 Formulação RB")
+    # Marca RFB: logo centralizada, seguida do nome e subtítulo do sistema.
+    logo_left, logo_center, logo_right = st.columns([1, 3.2, 1])
+    with logo_center:
+        if LOGO_PATH.exists():
+            st.image(str(LOGO_PATH), width="stretch")
+        else:
+            st.caption("Logo não encontrada em assets/logo_rfb.png")
+
+    st.markdown("## RFB")
+    st.caption("Diet Formulation System")
+    st.divider()
+
     st.caption(f"{user.nome}\n\n{user.email}\n\n**{user.perfil}**")
     pages = ["Visão geral", "Nova formulação", "Dietas salvas", "Ingredientes"]
     if user.is_admin:

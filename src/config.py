@@ -36,7 +36,7 @@ NUTRIENTS: tuple[Nutrient, ...] = (
 
 NUTRIENT_CODES = [n.code for n in NUTRIENTS]
 NUTRIENT_BY_CODE = {n.code: n for n in NUTRIENTS}
-DEFAULT_CONSTRAINTS = ["NDT", "PB", "FDN", "FDA", "CA", "P"]
+DEFAULT_CONSTRAINTS = ["MS","NDT","PB","FDN","FDA","AMIDO","CA","P",]
 ROLES = ("Administrador", "Formulador", "Consulta")
 
 INGREDIENT_COLUMNS = [

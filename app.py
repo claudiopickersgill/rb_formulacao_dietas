@@ -11,7 +11,7 @@ from src.repositories.factory import build_repository
 from src.ui_helpers import inject_css
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-LOGO_PATH = PROJECT_ROOT / "assets" / "logo_rfb.png"
+LOGO_PATH = PROJECT_ROOT / "assets" / "logo_rfb_2.png"
 
 st.set_page_config(
     page_title="RFB | Diet Formulation System",

@@ -111,8 +111,8 @@ with st.sidebar:
         else:
             st.caption("Logo não encontrada em assets/logo_rfb.png")
 
-    st.markdown("## RFB")
-    st.caption("Diet Formulation System")
+    # st.markdown("## RFB")
+    # st.caption("Diet Formulation System")
     st.divider()
 
     st.caption(f"{user.nome}\n\n{user.email}\n\n**{user.perfil}**")

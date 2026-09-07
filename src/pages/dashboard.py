@@ -6,7 +6,7 @@ import streamlit as st
 from ..models import User
 from ..repositories.base import Repository
 from ..ui_helpers import go_to, page_header
-from ..utils import as_bool, format_brl
+from ..utils import as_bool, format_brl, numeric_series
 
 
 def render(repository: Repository, user: User) -> None:
@@ -16,7 +16,7 @@ def render(repository: Repository, user: User) -> None:
 
     active_count = 0 if ingredients.empty else int(ingredients["ativo"].map(lambda v: as_bool(v, True)).sum())
     warning_count = 0 if ingredients.empty else int(ingredients["qualidade_dados"].fillna("").astype(str).str.strip().ne("").sum())
-    avg_cost = pd.to_numeric(diets.get("custo_kg", pd.Series(dtype=float)), errors="coerce").mean()
+    avg_cost = numeric_series(diets.get("custo_kg", pd.Series(dtype=float))).mean()
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Ingredientes ativos", active_count)
@@ -26,7 +26,6 @@ def render(repository: Repository, user: User) -> None:
 
     st.subheader("Ações rápidas")
     a1, a2, a3 = st.columns(3)
-
     a1.button(
         "Nova formulação",
         type="primary",
@@ -34,14 +33,12 @@ def render(repository: Repository, user: User) -> None:
         on_click=go_to,
         args=("Nova formulação",),
     )
-
     a2.button(
         "Cadastrar ingrediente",
         width="stretch",
         on_click=go_to,
         args=("Ingredientes",),
     )
-
     a3.button(
         "Abrir dietas salvas",
         width="stretch",
@@ -56,7 +53,7 @@ def render(repository: Repository, user: User) -> None:
             st.info("Nenhuma dieta foi salva ainda.")
         else:
             display = diets[["nome", "status", "custo_kg", "proprietario", "updated_at"]].head(8).copy()
-            display["custo_kg"] = pd.to_numeric(display["custo_kg"], errors="coerce")
+            display["custo_kg"] = numeric_series(display["custo_kg"])
             st.dataframe(
                 display,
                 hide_index=True,

@@ -49,7 +49,7 @@
      "updated_at",
 --- /dev/null
 +++ b/src/cqbal_import.py
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,152 @@
 +"""Leitura de PDFs digitais CQBAL e conversão explícita para porcentagem."""
 +from __future__ import annotations
 +
@@ -175,14 +175,29 @@
 +                            unidade_origem=unit, campo_base=target, valor_em_porcentagem=converted,
 +                            N=record['n'], S=record['s'], tratamento=status))
 +    missing = [code for code, value in composition.items() if value is None]
++    for code in missing:
++        composition[code] = 0.0
++    represented = {row['campo_base'] for row in preview if row['campo_base']}
++    for row in preview:
++        if row['campo_base'] in missing:
++            row['valor_em_porcentagem'] = 0.0
++            row['tratamento'] = 'Ausente no relatório; preencher com zero'
++    for code in missing:
++        if code not in represented:
++            preview.append(dict(nutriente_cqbal=None, secao='Ausente no relatório', media_original=None,
++                                unidade_origem=None, campo_base=code, valor_em_porcentagem=0.0,
++                                N=None, S=None, tratamento='Ausente no relatório; preencher com zero'))
 +    return composition, preview, missing
 +
 +
 +def provenance_json(report: CQBALReport, macro_unit: str, filename: str) -> str:
++    _, _, missing = convert_report(report, macro_unit)
 +    value = json.dumps(dict(fonte='CQBAL', arquivo=filename, sha256=report.sha256,
 +                           nome_original=report.name, categoria=report.category,
 +                           unidade_macro_origem=macro_unit, unidade_micro_origem='mg/kg',
-+                           unidade_destino='%', metodo_ndt='NDT OBS', registros=report.records),
++                           unidade_destino='%', metodo_ndt='NDT OBS',
++                           politica_ausentes='preencher_com_zero', campos_preenchidos_com_zero=missing,
++                           registros=report.records),
 +                       ensure_ascii=False, allow_nan=False, separators=(',', ':'))
 +    if len(value) > 45000:
 +        raise ValueError('Relatório muito extenso para armazenar a procedência em uma célula do Google.')
@@ -263,7 +278,7 @@
 +    st.download_button('Baixar todos os dados e procedência (JSON)', provenance.encode('utf-8'),
 +                       file_name='cqbal_composicao.json', mime='application/json', key=prefix+'_download')
 +    if missing:
-+        st.warning('Sem informação importável, permanecerão em branco: ' + ', '.join(missing))
++        st.warning('Sem informação importável, serão preenchidos com zero: ' + ', '.join(missing))
 +    name = st.text_input('Nome na nossa base', report.name, key=prefix+'_name').strip()
 +    default_type = 'Mineral' if report.category in {'MINERAIS', 'FONTES DE MINERAIS'} else 'Alimento'
 +    kind = st.selectbox('Tipo do ingrediente', ['Alimento', 'Mineral'],
@@ -283,7 +298,7 @@
 +        labels = {str(r['ingredient_id']): f"{r['nome']} · {r['ingredient_id']}" for _, r in ingredients.iterrows()}
 +        selected = st.selectbox('Cadastro que será atualizado', ids, format_func=lambda x: labels[x], key=prefix+'_target')
 +        existing = ingredients.loc[ingredients['ingredient_id'].astype(str).eq(selected)].iloc[0].to_dict()
-+        st.warning('A composição desse cadastro será substituída. Campos não encontrados no relatório ficarão em branco.')
++        st.warning('A composição desse cadastro será substituída. Campos não encontrados no relatório receberão zero.')
 +        overwrite = st.checkbox('Confirmo substituir a composição do cadastro selecionado.', key=prefix+'_overwrite')
 +    else:
 +        overwrite = True
@@ -296,7 +311,7 @@
 +        payload.update(ingredient_id=(existing or {}).get('ingredient_id') or new_id('ing'),
 +                       tipo=kind, nome=name, classificacao=classification, fonte='CQBAL — ' + report.name,
 +                       ativo=as_bool((existing or {}).get('ativo'), True), cqbal_dados=provenance,
-+                       qualidade_dados=('CQBAL: composição parcial; sem informação importável para ' + ', '.join(missing)) if missing else '')
++                       qualidade_dados=('CQBAL: composição parcial; preenchidos com zero por ausência de informação: ' + ', '.join(missing)) if missing else '')
 +        payload['observacoes'] = '\n'.join(filter(None, [str((existing or {}).get('observacoes') or ''),
 +            f'CQBAL importado em {local_now_iso()}; arquivo {uploaded.name}; NDT OBS; macro origem {macro_unit}; micro origem mg/kg; destino %. SHA256 {digest}.']))
 +        if len(payload['observacoes']) > 45000:
@@ -677,7 +692,7 @@
              idx = current.index[mask][0]
 --- /dev/null
 +++ b/tests/test_cqbal_import.py
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,107 @@
 +import json
 +import unittest
 +import importlib.util
@@ -707,9 +722,10 @@
 +        self.assertEqual(values['EE'], 20.06)
 +        self.assertEqual(values['MM'], 4.28)
 +        self.assertEqual(values['FB'], 25.39)
-+        self.assertIsNone(values['Se'])
++        self.assertEqual(values['Se'], 0.0)
 +        self.assertIn('Se', missing)
-+        self.assertEqual(len(preview), len(report.records))
++        self.assertTrue(all(value is not None for value in values.values()))
++        self.assertTrue(any(row['campo_base']=='Se' and row['valor_em_porcentagem']==0 for row in preview))
 +
 +    def test_units(self):
 +        report = parse_report_text(report_text('Ca 12 2 1.2 P 0 1 -\nZn 50 2 0.1 Se 0.1 1 -'))
@@ -723,7 +739,7 @@
 +
 +    def test_no_ndt_fallback(self):
 +        report = parse_report_text(report_text('MS 90 1 - NDT(iv) 60 1 -'))
-+        self.assertIsNone(convert_report(report, '%')[0]['NDT'])
++        self.assertEqual(convert_report(report, '%')[0]['NDT'], 0.0)
 +
 +    def test_provenance(self):
 +        report = parse_report_text(report_text('MS 90 10 1.2'), 'abc')
@@ -731,6 +747,17 @@
 +        self.assertEqual(source['registros'][0]['n'], 10)
 +        self.assertEqual(source['registros'][0]['s'], 1.2)
 +        self.assertEqual(source['sha256'], 'abc')
++        self.assertIn('Se', source['campos_preenchidos_com_zero'])
++        self.assertNotIn('MS', source['campos_preenchidos_com_zero'])
++
++    def test_explicit_zero_and_missing_marker(self):
++        report = parse_report_text(report_text('MS 0 1 - Ca - 1 -'))
++        values, _, missing = convert_report(report, '%')
++        self.assertEqual(values['MS'], 0.0)
++        self.assertNotIn('MS', missing)
++        self.assertEqual(values['CA'], 0.0)
++        self.assertIn('CA', missing)
++        self.assertIsNone(report.records[1]['media'])
 +
 +    def test_reject_bad_input(self):
 +        for text in ['', report_text('MS 90 1 -').replace('Nutrientes Calculados',''),

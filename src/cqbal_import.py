@@ -123,14 +123,29 @@ def convert_report(report: CQBALReport, macro_unit: str) -> tuple[dict, list[dic
                             unidade_origem=unit, campo_base=target, valor_em_porcentagem=converted,
                             N=record['n'], S=record['s'], tratamento=status))
     missing = [code for code, value in composition.items() if value is None]
+    for code in missing:
+        composition[code] = 0.0
+    represented = {row['campo_base'] for row in preview if row['campo_base']}
+    for row in preview:
+        if row['campo_base'] in missing:
+            row['valor_em_porcentagem'] = 0.0
+            row['tratamento'] = 'Ausente no relatório; preencher com zero'
+    for code in missing:
+        if code not in represented:
+            preview.append(dict(nutriente_cqbal=None, secao='Ausente no relatório', media_original=None,
+                                unidade_origem=None, campo_base=code, valor_em_porcentagem=0.0,
+                                N=None, S=None, tratamento='Ausente no relatório; preencher com zero'))
     return composition, preview, missing
 
 
 def provenance_json(report: CQBALReport, macro_unit: str, filename: str) -> str:
+    _, _, missing = convert_report(report, macro_unit)
     value = json.dumps(dict(fonte='CQBAL', arquivo=filename, sha256=report.sha256,
                            nome_original=report.name, categoria=report.category,
                            unidade_macro_origem=macro_unit, unidade_micro_origem='mg/kg',
-                           unidade_destino='%', metodo_ndt='NDT OBS', registros=report.records),
+                           unidade_destino='%', metodo_ndt='NDT OBS',
+                           politica_ausentes='preencher_com_zero', campos_preenchidos_com_zero=missing,
+                           registros=report.records),
                        ensure_ascii=False, allow_nan=False, separators=(',', ':'))
     if len(value) > 45000:
         raise ValueError('Relatório muito extenso para armazenar a procedência em uma célula do Google.')

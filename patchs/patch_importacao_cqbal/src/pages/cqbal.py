@@ -51,7 +51,7 @@ def render(repository: Repository, user: User) -> None:
     st.download_button('Baixar todos os dados e procedência (JSON)', provenance.encode('utf-8'),
                        file_name='cqbal_composicao.json', mime='application/json', key=prefix+'_download')
     if missing:
-        st.warning('Sem informação importável, permanecerão em branco: ' + ', '.join(missing))
+        st.warning('Sem informação importável, serão preenchidos com zero: ' + ', '.join(missing))
     name = st.text_input('Nome na nossa base', report.name, key=prefix+'_name').strip()
     default_type = 'Mineral' if report.category in {'MINERAIS', 'FONTES DE MINERAIS'} else 'Alimento'
     kind = st.selectbox('Tipo do ingrediente', ['Alimento', 'Mineral'],
@@ -71,7 +71,7 @@ def render(repository: Repository, user: User) -> None:
         labels = {str(r['ingredient_id']): f"{r['nome']} · {r['ingredient_id']}" for _, r in ingredients.iterrows()}
         selected = st.selectbox('Cadastro que será atualizado', ids, format_func=lambda x: labels[x], key=prefix+'_target')
         existing = ingredients.loc[ingredients['ingredient_id'].astype(str).eq(selected)].iloc[0].to_dict()
-        st.warning('A composição desse cadastro será substituída. Campos não encontrados no relatório ficarão em branco.')
+        st.warning('A composição desse cadastro será substituída. Campos não encontrados no relatório receberão zero.')
         overwrite = st.checkbox('Confirmo substituir a composição do cadastro selecionado.', key=prefix+'_overwrite')
     else:
         overwrite = True
@@ -84,7 +84,7 @@ def render(repository: Repository, user: User) -> None:
         payload.update(ingredient_id=(existing or {}).get('ingredient_id') or new_id('ing'),
                        tipo=kind, nome=name, classificacao=classification, fonte='CQBAL — ' + report.name,
                        ativo=as_bool((existing or {}).get('ativo'), True), cqbal_dados=provenance,
-                       qualidade_dados=('CQBAL: composição parcial; sem informação importável para ' + ', '.join(missing)) if missing else '')
+                       qualidade_dados=('CQBAL: composição parcial; preenchidos com zero por ausência de informação: ' + ', '.join(missing)) if missing else '')
         payload['observacoes'] = '\n'.join(filter(None, [str((existing or {}).get('observacoes') or ''),
             f'CQBAL importado em {local_now_iso()}; arquivo {uploaded.name}; NDT OBS; macro origem {macro_unit}; micro origem mg/kg; destino %. SHA256 {digest}.']))
         if len(payload['observacoes']) > 45000:

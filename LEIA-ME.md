@@ -17,12 +17,12 @@ Alternativa à cópia: na raiz do projeto, valide `git apply --check --ignore-sp
 - FDA e FDN recebem exclusivamente os códigos exatos. FDAp, FDNcp, FDNi e demais variantes são preservados na procedência, sem substituição.
 - Macrominerais: a unidade de origem deve ser confirmada. g/kg é dividido por 10; % é mantido. Isso inclui Cl quando presente, além de Ca, P, Mg, K, Na e S.
 - Microminerais Fe, Cu, Mn, Zn, Co, I e Se: origem mg/kg; o valor é dividido por 10.000 para armazenar em %.
-- Dados ausentes ficam em branco. Zeros publicados são preservados. A prévia avisa quais campos permanecerão ausentes.
+- Nutrientes ausentes, sem média ou sem código importável recebem 0 na composição. Zeros publicados são preservados. A prévia diferencia os zeros publicados dos zeros usados por ausência de dados; a procedência lista os campos preenchidos com zero. N e S ausentes na fonte continuam sem valor na procedência, pois são informações estatísticas, não teores nutricionais.
 - Os valores existentes da base NÃO são convertidos. Conforme combinado, foram considerados já expressos em %. Os rótulos de microminerais passam para %.
 - A importação exige confirmação da base de expressão. Ela não converte matéria natural para matéria seca. Só importe após conferir que a base corresponde à usada no cadastro/dieta.
 - PDFs digitalizados, corrompidos, com vários alimentos ou sem a seção Nutrientes Calculados são rejeitados. Limites: 10 MB e 20 páginas. Não há OCR.
 - Nutrientes calculados, valores negativos calculados, N e S e todos os dados reconhecidos das tabelas são guardados em `cqbal_dados` (JSON). Valores negativos em campos importáveis são rejeitados.
-- Nome e classificação podem ser revisados. A atualização é escolhida explicitamente por ID. Ela substitui a composição; campos ausentes no relatório ficam em branco. Preço e demais dados do cadastro existente são preservados.
+- Nome e classificação podem ser revisados. A atualização é escolhida explicitamente por ID. Ela substitui a composição; campos ausentes no relatório recebem zero. Preço e demais dados do cadastro existente são preservados.
 - Não há comparação aproximada de nomes. Um nome invertido como “Caroço de algodão” pode não coincidir com “Algodão caroço”; para atualizar, selecione explicitamente o cadastro correto.
 - A procedência pode ser consultada/baixada na aba Editar. Ela registra o arquivo, hash SHA256, nome original, categoria, unidades escolhidas, método do NDT, médias, N e S. A data e o responsável permanecem nos campos de cadastro/auditoria e nas observações.
 - Há limite de 45.000 caracteres para armazenar procedência em uma célula. Relatórios maiores são recusados sem gravação.
@@ -42,7 +42,7 @@ Alternativa à cópia: na raiz do projeto, valide `git apply --check --ignore-sp
 
 ## Validação
 
-- 10 testes novos executados: parsing, conversões, campos exatos, lacunas, procedência, rejeição de entradas, PDF digital, gravação Google simulada, cache, duplicatas e evolução de cabeçalho.
+- 11 testes novos executados: parsing, conversões, campos exatos, preenchimento de ausentes com zero, distinção de zeros publicados, procedência, rejeição de entradas, PDF digital, gravação Google simulada, cache, duplicatas e evolução de cabeçalho.
 - 1 teste adicional de solver foi incluído, mas não executado aqui porque SciPy não está instalado no ambiente de preparação.
 - 8 testes existentes selecionados executados diretamente: CRUD, Google simulado, inicialização, migração, exportação e apresentação.
 - Parsing conferido nas transcrições dos 35 relatórios extraídos na conversa (1.156 registros) e no PDF real de Algodão — Caroço.

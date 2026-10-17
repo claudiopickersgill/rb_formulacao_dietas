@@ -27,9 +27,10 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(values['EE'], 20.06)
         self.assertEqual(values['MM'], 4.28)
         self.assertEqual(values['FB'], 25.39)
-        self.assertIsNone(values['Se'])
+        self.assertEqual(values['Se'], 0.0)
         self.assertIn('Se', missing)
-        self.assertEqual(len(preview), len(report.records))
+        self.assertTrue(all(value is not None for value in values.values()))
+        self.assertTrue(any(row['campo_base']=='Se' and row['valor_em_porcentagem']==0 for row in preview))
 
     def test_units(self):
         report = parse_report_text(report_text('Ca 12 2 1.2 P 0 1 -\nZn 50 2 0.1 Se 0.1 1 -'))
@@ -43,7 +44,7 @@ class ImportTests(unittest.TestCase):
 
     def test_no_ndt_fallback(self):
         report = parse_report_text(report_text('MS 90 1 - NDT(iv) 60 1 -'))
-        self.assertIsNone(convert_report(report, '%')[0]['NDT'])
+        self.assertEqual(convert_report(report, '%')[0]['NDT'], 0.0)
 
     def test_provenance(self):
         report = parse_report_text(report_text('MS 90 10 1.2'), 'abc')
@@ -51,6 +52,17 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(source['registros'][0]['n'], 10)
         self.assertEqual(source['registros'][0]['s'], 1.2)
         self.assertEqual(source['sha256'], 'abc')
+        self.assertIn('Se', source['campos_preenchidos_com_zero'])
+        self.assertNotIn('MS', source['campos_preenchidos_com_zero'])
+
+    def test_explicit_zero_and_missing_marker(self):
+        report = parse_report_text(report_text('MS 0 1 - Ca - 1 -'))
+        values, _, missing = convert_report(report, '%')
+        self.assertEqual(values['MS'], 0.0)
+        self.assertNotIn('MS', missing)
+        self.assertEqual(values['CA'], 0.0)
+        self.assertIn('CA', missing)
+        self.assertIsNone(report.records[1]['media'])
 
     def test_reject_bad_input(self):
         for text in ['', report_text('MS 90 1 -').replace('Nutrientes Calculados',''),

@@ -22,10 +22,23 @@ Documentação:
 - INTEGRACAO_REALIZADA.md
 - docs/GOOGLE_SHEETS.md
 - DELIVERY_NOTES.md
+- PATCHES.md
 
 Testes:
-- tests/test_solver.py
-- tests/test_repository.py
+- tests/test_cqbal_import.py
+- tests/test_cqbal_storage.py
+- tests/test_decimal_comma.py
+- tests/test_dynamic_nutrients.py
 - tests/test_exports.py
-- tests/test_legacy_google_migration.py
 - tests/test_google_repository_integration.py
+- tests/test_infeasible_preview.py
+- tests/test_ingredient_backfill.py
+- tests/test_ingredient_quality.py
+- tests/test_legacy_google_migration.py
+- tests/test_nutrient_display.py
+- tests/test_repository.py
+- tests/test_saved_diet_loading.py
+- tests/test_security.py
+- tests/test_solver.py
+- tests/test_timezone.py
+

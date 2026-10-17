@@ -1,110 +1,150 @@
-# Formulação RB — WebApp com Google Sheets
+# RFB — Formulação de Dietas para Ruminantes
 
-Aplicativo Streamlit para formulação de dietas de ruminantes por custo mínimo. Esta versão mantém o layout e as funcionalidades do pacote `formulacao_rb_webapp_mvp` e adapta somente a camada de dados para reutilizar a conexão Google já empregada no repositório `claudiopickersgill/formulacoes_dietas`.
+Aplicativo web em Streamlit para formular dietas de ruminantes por custo mínimo, com cadastro de ingredientes, restrições nutricionais, importação de relatórios CQBAL, armazenamento no Google Sheets e exportação de resultados.
 
-## Funcionalidades preservadas
+Documentação consolidada em **17/10/2026**, com base no código local e no histórico de atualizações. O histórico das correções e das regras substituídas está em [patches.md](patches.md).
 
-- painel inicial;
-- login local ou Google/OIDC;
-- perfis Administrador, Formulador e Consulta;
-- cadastro, edição, inativação e importação de ingredientes;
-- formulação por custo mínimo com limites de inclusão;
-- restrições mínimas e máximas para 20 nutrientes;
-- diagnóstico de dados ausentes e problemas inviáveis;
-- salvamento, edição, duplicação, comparação e exclusão de dietas;
-- exportação em Excel, PDF e CSV;
-- auditoria de alterações;
-- modo local para desenvolvimento.
+Repositório: [claudiopickersgill/rb_formulacao_dietas](https://github.com/claudiopickersgill/rb_formulacao_dietas).
 
-## Integração implementada
+## Funcionalidades
 
-A autenticação da conta de serviço segue a mesma lógica do repositório original:
+- **Visão geral:** ingredientes ativos, pendências de qualidade, dietas acessíveis e custos.
+- **Ingredientes:** consulta, cadastro, edição, inativação, reativação e importação por CSV ou PDF do CQBAL.
+- **Nova formulação:** seleção de ingredientes, preços, limites de inclusão e restrições nutricionais dinâmicas.
+- **Resultado:** composição da mistura, custo, teores nutricionais e comparação com os limites solicitados.
+- **Diagnóstico de inviabilidade:** mensagens de conflito e simulação de uma mistura com restrições nutricionais flexibilizadas.
+- **Dietas salvas:** consulta, continuação da edição, duplicação, comparação e exclusão conforme o perfil.
+- **Exportações:** Excel, PDF e CSV.
+- **Administração:** usuários, auditoria e recursos de diagnóstico do sistema.
 
-```python
-credentials = service_account.Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=["https://www.googleapis.com/auth/spreadsheets"],
-)
-gc = gspread.authorize(credentials)
-sheet = gc.open_by_url(st.secrets["private_gsheets_url"])
-```
+## Perfis de acesso
 
-Essa lógica foi centralizada em `src/google_connection.py`. Os arquivos `pages/conexao/conexao.py` e `pages/conexao/cria_df.py` permanecem disponíveis para compatibilidade com imports do projeto antigo.
+| Recurso | Administrador | Formulador | Consulta |
+|---|---|---|---|
+| Consultar ingredientes | Sim | Sim | Sim |
+| Cadastrar, editar e importar ingredientes | Sim | Sim | Não |
+| Formular e simular dietas | Sim | Sim | Sim |
+| Salvar alterações em dietas | Sim | Sim, conforme propriedade | Não |
+| Acessar dietas | Todas | Próprias | Próprias |
+| Exportar resultados/dietas acessíveis | Sim | Sim | Sim |
+| Gerir usuários e consultar auditoria | Sim | Não | Não |
 
-## Abas utilizadas
+O login do usuário e a conexão com o Google Sheets são independentes. O usuário recebe permissões pelo cadastro; a conta de serviço acessa a planilha.
 
-Para não alterar nem apagar a primeira aba já existente, o aplicativo cria:
+## Formulação
 
-- `rb_ingredientes`
-- `rb_usuarios`
-- `rb_dietas`
-- `rb_dieta_ingredientes`
-- `rb_dieta_restricoes`
-- `rb_auditoria`
+O cálculo principal minimiza o custo por kg de uma mistura cuja soma das inclusões é **100%**. São respeitados os mínimos e máximos de inclusão e as restrições nutricionais preenchidas.
 
-O prefixo `rb_` pode ser modificado em `[google_sheets].table_prefix`.
+Preço zero ou ausente exige a marcação explícita **Sem custo**. Quando marcada, o preço efetivo usado no cálculo é zero.
 
-### Migração automática
+As restrições são montadas a partir dos nutrientes com algum valor numérico declarado nos ingredientes selecionados. Zero é um valor declarado. Preencher mínimo ou máximo ativa a restrição; deixar ambos vazios permite apenas calcular o teor final quando há dados suficientes.
 
-Quando `rb_ingredientes` estiver vazia, o aplicativo procura uma aba antiga com colunas semelhantes a `Tipo`, `Ingredientes`, `Classificação`, `MS`, `NDT`, `PB` etc. Os dados são copiados para `rb_ingredientes`, enquanto a aba original permanece intacta.
+A tabela apresenta nomes completos, siglas e unidades, por exemplo **Matéria seca - MS (%)** e **Cálcio - Ca (%)**. Os códigos usados nos cálculos e no armazenamento são preservados; cálcio continua identificado internamente por `CA`.
 
-A migração ocorre apenas uma vez, porque deixa de ser executada quando a nova tabela já contém registros.
+Quando ingredientes ou limites são alterados após o cálculo, é necessário recalcular antes de salvar. As dietas salvas preservam a composição utilizada no momento da gravação.
+
+### Quando não há solução viável
+
+O app mantém os diagnósticos e pode mostrar uma **prévia de diagnóstico** com mistura, custo simulado, teores, falta para o mínimo e excesso sobre o máximo.
+
+Essa simulação mantém os limites de inclusão e a soma de 100%, mas flexibiliza as restrições nutricionais para minimizar os desvios relativos. Ela não minimiza custo, não é uma dieta aprovada e não oferece salvamento como solução válida. Erros de preenchimento ou limites de inclusão incompatíveis podem impedir a geração da prévia.
+
+## Nutrientes e unidades
+
+O registro atual possui **23 nutrientes**, todos armazenados em **porcentagem**:
+
+| Grupo | Nutrientes |
+|---|---|
+| Composição principal | MS, NDT, PB, FDN, FDA, EE, MM, FB e AMIDO |
+| Macrominerais | Ca (`CA`), P, Mg, Na, K, Cl e S |
+| Microminerais | Fe, Cu, Mn, Zn, Co, I e Se |
+
+Os limites nutricionais devem usar as mesmas unidades da composição. O sistema não converte automaticamente uma dieta entre matéria natural e matéria seca: a base de expressão dos dados deve ser coerente.
+
+## Importação CQBAL
+
+Em **Ingredientes > Importar CQBAL**:
+
+1. Envie o PDF digital do **Relatório Completo** de um único alimento.
+2. Confirme se os macrominerais da fonte estão em `%` ou `g/kg`.
+3. Confira a prévia, incluindo os valores convertidos e os campos preenchidos com zero.
+4. Revise nome, tipo e classificação; escolha cadastrar ou atualizar explicitamente um registro por ID.
+5. Confirme os valores e a base de expressão e salve.
+
+### Regras de importação
+
+| Informação da fonte | Tratamento |
+|---|---|
+| MS, PB, EE, MM, FB e AMIDO | Importar em % |
+| NDT | Usar exclusivamente `NDT OBS` |
+| FDA e FDN | Usar somente os códigos exatos; não substituir por variantes |
+| Macrominerais em g/kg | Dividir por 10 para armazenar em % |
+| Macrominerais em % | Manter o valor |
+| Microminerais em mg/kg ou ppm | Dividir por 10.000 para armazenar em % |
+| Nutriente sem informação importável | Gravar 0 e identificar o preenchimento na procedência |
+| Colunas estatísticas N e S e demais dados não mapeados | Preservar na procedência; não converter em teores da dieta |
+
+Exemplos: **12 g/kg = 1,2%**; **50 mg/kg = 0,005%**.
+
+Os valores antigos da base não são reconvertidos: foram considerados já expressos em porcentagem. A regra de preencher ausentes com zero é aplicada à composição importada pelo CQBAL; não é uma limpeza retroativa de todos os cadastros nem dos campos estatísticos N e S.
+
+A atualização de um ingrediente substitui sua composição: nutrientes ausentes no PDF recebem zero. Preço e demais informações existentes são preservados conforme o fluxo de atualização.
+
+O campo `cqbal_dados` guarda nome original, arquivo, hash SHA256, categoria, unidades de origem, método do NDT, registros reconhecidos e campos preenchidos com zero. A procedência pode ser consultada e baixada na edição do ingrediente.
+
+**Limites:** um alimento por arquivo, PDF digital de até 10 MB e 20 páginas, com seção de nutrientes calculados. Não há OCR. A procedência deve caber no limite de 45.000 caracteres adotado para uma célula do Google Sheets.
+
+## Qualidade dos cadastros
+
+- `qualidade_dados` registra pendências que exigem revisão.
+- `observacoes` guarda histórico e informações de procedência.
+- O dashboard considera pendências de ingredientes ativos.
+- Notas legadas conhecidas são reclassificadas na leitura. Uma observação desconhecida não é descartada automaticamente.
+- Registros inativos são preservados para manter os IDs históricos.
+- O preenchimento automático de nutrientes a partir de referências antigas na inicialização está desativado.
+
+## Armazenamento
+
+O backend de produção inicial é Google Sheets. O modo local usa arquivos CSV para desenvolvimento.
+
+| Aba padrão | Conteúdo |
+|---|---|
+| `rb_ingredientes` | Catálogo, composição, situação, qualidade e procedência |
+| `rb_usuarios` | Usuários, perfis, situação e autenticação local |
+| `rb_dietas` | Metadados e custo das dietas |
+| `rb_dieta_ingredientes` | Ingredientes, inclusões e composição usada em cada dieta |
+| `rb_dieta_restricoes` | Limites nutricionais das dietas |
+| `rb_auditoria` | Operações registradas pelo sistema |
+
+O prefixo é configurável. A migração legada só copia ingredientes quando a tabela de destino está vazia. A tabela legada permanece preservada.
+
+Criação e edição de ingredientes no Google usam gravação por registro e confirmação por leitura. A auditoria acrescenta linhas. Isso evita a sobrescrita da aba inteira nesses fluxos, mas não constitui transação distribuída. Outras entidades mantêm suas rotinas anteriores; uso concorrente intenso requer evolução da persistência.
 
 ## Executar localmente
 
-Recomendado: Python 3.11 ou 3.12.
+Recomendado: Python 3.11 ou 3.12, em ambiente virtual.
 
-```bash
+No PowerShell, a partir da raiz do projeto:
+
+```powershell
 python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .streamlit/secrets.toml.example .streamlit/secrets.toml
-streamlit run app.py
+.\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Caso o PowerShell bloqueie a ativação:
+Configure o arquivo de segredos antes de usar o Google Sheets. `main.py` permanece como entrada de compatibilidade.
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.venv\Scripts\Activate.ps1
-```
+### Configuração Google Sheets
 
-O arquivo `main.py` também pode ser usado para compatibilidade:
-
-```bash
-streamlit run main.py
-```
-
-## Configuração mínima para Google Sheets
-
-Edite `.streamlit/secrets.toml`:
+Use o modelo `.streamlit/secrets.toml.example`. Os principais campos são:
 
 ```toml
 private_gsheets_url = "https://docs.google.com/spreadsheets/d/SEU_ID/edit"
 
-[gcp_service_account]
-type = "service_account"
-project_id = "..."
-private_key_id = "..."
-private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-client_email = "...@....iam.gserviceaccount.com"
-client_id = "..."
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "..."
-
 [app]
 repository = "google_sheets"
 auth_mode = "local"
-local_email = "admin@local"
-local_password = "TROQUE_ESTA_SENHA"
-local_name = "Administrador"
 
 [google_sheets]
 table_prefix = "rb_"
@@ -112,84 +152,56 @@ cache_ttl_seconds = 60
 max_retries = 5
 auto_migrate_legacy = true
 legacy_worksheet_index = 0
-legacy_worksheet_title = ""
 ```
 
-Compartilhe a planilha com o email indicado em `client_email`, concedendo permissão de editor.
+Complete também `[gcp_service_account]` e as credenciais de autenticação conforme o modelo. Compartilhe a planilha com o `client_email` da conta de serviço, com permissão de editor. Não publique o arquivo real de segredos.
 
-## Login Google/OIDC
+Para desenvolvimento com CSV, use `[app].repository = "local"`. O login local usa senhas individuais armazenadas como hash; o acesso administrativo configurado nos segredos permanece como recuperação. O login Google/OIDC é opcional e requer a configuração específica de `[auth]`, do provedor e de `auth_mode = "oidc"`.
 
-Depois de validar o banco, altere:
+### Publicar
 
-```toml
-[app]
-repository = "google_sheets"
-auth_mode = "oidc"
-oidc_provider = "google"
-bootstrap_admin_email = "seu-email@gmail.com"
-```
-
-E configure:
-
-```toml
-[auth]
-redirect_uri = "https://SEU-APP.streamlit.app/oauth2callback"
-cookie_secret = "CHAVE_ALEATORIA_LONGA"
-
-[auth.google]
-client_id = "CLIENT_ID_GOOGLE"
-client_secret = "CLIENT_SECRET_GOOGLE"
-server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
-```
-
-O login humano e a conta de serviço são independentes: o OIDC identifica o usuário; a conta de serviço acessa a planilha; `rb_usuarios` controla as permissões.
-
-## Publicar no Streamlit Community Cloud
-
-1. Envie o projeto ao GitHub sem `.streamlit/secrets.toml`.
-2. Crie um aplicativo no Streamlit Community Cloud.
-3. Selecione `app.py` como arquivo principal.
-4. Abra **Advanced settings > Secrets**.
-5. Cole o conteúdo do `secrets.toml` real.
-6. Faça o deploy.
-
-O arquivo `.gitignore` já impede o envio do segredo local.
-
-## Testes
-
-```bash
-pytest -q
-```
-
-A suíte cobre:
-
-- solver de custo mínimo;
-- problema inviável;
-- nutrientes ausentes;
-- persistência local;
-- exportações;
-- conversão da tabela antiga;
-- criação das abas `rb_*` e migração com uma planilha Google simulada.
-
-## Verificação do ambiente
-
-```bash
-python scripts/check_setup.py
-```
+No Streamlit Community Cloud, selecione `app.py`, mantenha `requirements.txt` atualizado e configure os segredos no painel do aplicativo. Após trocar arquivos, publique e reinicie/recalcule para não reutilizar resultados anteriores da sessão.
 
 ## Estrutura principal
 
 ```text
-app.py                         # entrada principal do Streamlit
-main.py                        # compatibilidade com o projeto antigo
-pages/conexao/                 # funções de conexão compatíveis
-src/google_connection.py       # autenticação Google centralizada
-src/repositories/google_sheets.py
-src/pages/                     # layout e telas originais do MVP
-src/solver.py                  # otimização
-src/exports.py                 # Excel, PDF e CSV
+app.py                         Inicialização e navegação
+src/pages/                     Telas efetivamente usadas pelo app
+src/config.py                  Nutrientes, unidades e schemas
+src/solver.py                  Otimização e diagnóstico
+src/validators.py              Validação anterior ao cálculo
+src/nutrients.py               Restrições dinâmicas
+src/cqbal_import.py            Extração e conversão de PDFs CQBAL
+src/pages/cqbal.py             Prévia e confirmação da importação
+src/ingredient_quality.py      Classificação de notas legadas
+src/diet_loading.py            Normalização de dietas salvas
+src/repositories/              Google Sheets e CSV local
+src/exports.py                 Excel, PDF e CSV
+src/auth.py                    Autenticação
+src/security.py                Senhas e hashes
+tests/                         Testes automatizados
+readme.md                      Informações gerais
+patches.md                     Histórico consolidado de evoluções
 ```
 
-## Observações de produção
+Existem arquivos de compatibilidade fora de `src/pages`. Ao aplicar uma correção de tela, confira o caminho exato: por exemplo, `src/pages/formulation.py` é o arquivo usado pelo fluxo atual de formulação.
 
-O Google Sheets é adequado para o MVP e para poucos usuários simultâneos. Como cada operação de alteração regrava uma tabela lógica, um uso intenso e concorrente deverá futuramente migrar para PostgreSQL ou outro banco transacional. O aplicativo já separa a interface do repositório para facilitar essa troca.
+## Testes e atualizações
+
+Com as dependências completas instaladas:
+
+```powershell
+python -m pytest tests -q
+python scripts/check_setup.py
+```
+
+Testes específicos dos módulos recentes:
+
+```powershell
+python -m unittest discover -s tests -p "test_cqbal*.py" -v
+python -m unittest discover -s tests -p test_infeasible_preview.py -v
+```
+
+Antes de atualizar, faça backup do código e das tabelas afetadas. Evite gravar na base durante a aplicação. Patches antigos que substituem arquivos inteiros podem desfazer melhorias posteriores: consulte a sequência e as regras vigentes em [patches.md](patches.md).
+
+Os resultados e as limitações de validação de cada entrega estão registrados no histórico; este documento não declara uma nova execução da suíte completa.

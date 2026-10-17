@@ -158,6 +158,8 @@ def render(repository: Repository, user: User) -> None:
             st.info("Selecione ingredientes com composição nutricional cadastrada para definir restrições.")
             constraints = constraints_input.copy()
         else:
+            constraints_input = constraints_input.copy()
+            constraints_input["nutriente"] = constraints_input["nutriente"].replace({"CA": "Ca"})
             constraints = st.data_editor(
                 constraints_input,
                 hide_index=True,
@@ -172,6 +174,7 @@ def render(repository: Repository, user: User) -> None:
                     "maximo": st.column_config.NumberColumn("Máximo", step=0.01, format="%.4f"),
                 },
             )
+            constraints["nutriente"] = constraints["nutriente"].replace({"Ca": "CA"})
 
         st.caption(
             "A lista é montada automaticamente com os nutrientes presentes nos ingredientes selecionados. "

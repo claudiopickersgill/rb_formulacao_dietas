@@ -19,6 +19,13 @@ class FakeWorksheet:
     def __init__(self, title: str, values: list[list[str]] | None = None):
         self.title = title
         self._values = [row[:] for row in (values or [])]
+        self.col_count = max((len(r) for r in self._values), default=10)
+
+    def append_row(self, values, **kwargs):
+        self._values.append(list(values))
+
+    def add_cols(self, count):
+        self.col_count += count
 
     def get_all_values(self):
         return [row[:] for row in self._values]
@@ -26,7 +33,12 @@ class FakeWorksheet:
     def update(self, values=None, range_name=None, *args, **kwargs):
         if values is None and args:
             values = args[0]
-        self._values = [list(row) for row in (values or [])]
+        import re
+        start = int(re.search(r"\d+", range_name or "A1").group()) - 1
+        for offset, row in enumerate(values or []):
+            while len(self._values) <= start + offset:
+                self._values.append([])
+            self._values[start + offset] = list(row)
 
     def format(self, *args, **kwargs):
         return None

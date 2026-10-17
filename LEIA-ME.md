@@ -1,51 +1,64 @@
-# Atualização da qualidade dos ingredientes
+# Atualização: importar Relatório Completo do CQBAL
 
-## Aplicação por substituição
-1. Faça backup do projeto e duplique a aba rb_ingredientes no Google Sheets.
-2. Extraia este ZIP em uma pasta temporária.
-3. Copie as pastas src e tests deste pacote para a raiz do projeto, mesclando pastas e substituindo somente os arquivos incluídos. Não substitua a pasta src inteira por uma pasta vazia.
-4. Reinicie o WebApp/limpe o cache do Streamlit.
-5. Confira: para a base inspecionada em 17/10/2026, 74 ativos e 1 ativo com pendência (Brasão 60P).
+## Aplicar
 
-Alternativa: aplique atualizacao.patch com git apply --ignore-space-change atualizacao.patch, em vez de copiar os arquivos. Não use os dois métodos. Antes, valide com git apply --check --ignore-space-change atualizacao.patch. O patch foi preparado a partir da cópia local fornecida; alterações posteriores precisam ser conciliadas.
+1. Faça backup do projeto e das abas `rb_ingredientes` e `rb_dieta_ingredientes`. Aplique com o app parado e sem outros usuários gravando.
+2. Extraia o ZIP em uma pasta temporária. Copie o conteúdo de `src`, `tests` e `requirements.txt` para a raiz do projeto, mesclando as pastas e substituindo somente os arquivos incluídos. Não substitua a pasta src inteira por uma pasta vazia.
+3. Instale/atualize as dependências com `python -m pip install -r requirements.txt`. Foi acrescentado pdfplumber para ler os PDFs digitais.
+4. Publique as alterações e reinicie o app. No Streamlit Cloud, mantenha requirements.txt na raiz para a instalação automática.
+5. Abra Ingredientes > Importar CQBAL. Envie o PDF de um único alimento. Confirme a unidade dos macrominerais, confira a prévia, escolha cadastrar ou atualizar e confirme o salvamento.
 
-## Comportamento
-- O dashboard conta e exibe somente ingredientes ativos com pendências.
-- A nova coluna observacoes guarda informações que não geram alerta e aparece na consulta, edição e exportação.
-- A classificação das notas antigas ocorre na leitura, por regras conservadoras. Não há migração em massa das células de qualidade_dados: a nota original permanece na planilha até que o cadastro seja salvo pelo app. Ao salvar, observações e pendências são gravadas separadamente.
-- A inicialização do repositório Google acrescenta observacoes ao schema existente, usando o mecanismo de atualização de schema do app. Esse mecanismo regrava a tabela; faça o backup antes do primeiro reinício. Nenhuma alteração foi executada no Google durante a preparação do pacote.
-- Textos desconhecidos permanecem como pendência. Avisos de duplicidade legada só são reclassificados quando existe exatamente uma ocorrência ativa do mesmo tipo e nome. Isso não substitui validação nutricional.
-- Os 11 inativos continuam disponíveis na consulta. A tabela do dashboard exibe todas as pendências ativas, sem o corte anterior de dez registros.
-- Edição e reativação verificam duplicatas ativas; a camada de armazenamento também protege gravações e importações. Inativos podem coexistir para preservar IDs históricos. O seletor de edição mostra situação e ID.
-- O preenchimento automático de nutrientes ao iniciar foi desabilitado para todos os ingredientes. A rotina auxiliar permanece no código para manutenção explícita, sem chamada na inicialização; seu registro informativo passa para observacoes.
-- Nenhum valor nutricional foi corrigido ou confirmado por este patch. Os campos desconhecidos do Brasão permanecem desconhecidos.
+Alternativa à cópia: na raiz do projeto, valide `git apply --check --ignore-space-change atualizacao.patch` e depois execute `git apply --ignore-space-change atualizacao.patch`. Use apenas um dos métodos. O patch foi preparado para a cópia local fornecida nesta conversa; alterações posteriores devem ser conciliadas antes de substituir os arquivos.
 
-## Arquivos
-src/config.py
-src/ingredient_quality.py (novo)
-src/pages/dashboard.py
-src/pages/ingredients.py
-src/repositories/tabular.py
-src/repositories/google_sheets.py
-tests/test_ingredient_backfill.py
-tests/test_ingredient_quality.py (novo)
+## Regras da importação
 
-## Validação realizada
-- Sintaxe de todos os arquivos Python do pacote.
-- Snapshot da base: 24 textos originais -> 1 pendência ativa e 23 observações; classificação idempotente sem modificar o snapshot original.
-- Testes de edição, preservação de observações, criação de duplicata, bloqueio e liberação de reativação.
-- Teste existente de CRUD local.
-- Inicialização Google simulada: nutrientes vazios permanecem vazios.
-- Não foi feita gravação real no Sheets nem teste visual em um app publicado.
-- O executor pytest não está instalado no ambiente de preparação. Os testes novos foram executados com unittest e os testes existentes selecionados foram chamados diretamente.
+- MS, PB, EE, MM, FB, FDA, FDN, AMIDO e NDT ficam em porcentagem.
+- NDT recebe exclusivamente NDT OBS. NDT calculado ou in vitro não preenche esse campo.
+- FDA e FDN recebem exclusivamente os códigos exatos. FDAp, FDNcp, FDNi e demais variantes são preservados na procedência, sem substituição.
+- Macrominerais: a unidade de origem deve ser confirmada. g/kg é dividido por 10; % é mantido. Isso inclui Cl quando presente, além de Ca, P, Mg, K, Na e S.
+- Microminerais Fe, Cu, Mn, Zn, Co, I e Se: origem mg/kg; o valor é dividido por 10.000 para armazenar em %.
+- Dados ausentes ficam em branco. Zeros publicados são preservados. A prévia avisa quais campos permanecerão ausentes.
+- Os valores existentes da base NÃO são convertidos. Conforme combinado, foram considerados já expressos em %. Os rótulos de microminerais passam para %.
+- A importação exige confirmação da base de expressão. Ela não converte matéria natural para matéria seca. Só importe após conferir que a base corresponde à usada no cadastro/dieta.
+- PDFs digitalizados, corrompidos, com vários alimentos ou sem a seção Nutrientes Calculados são rejeitados. Limites: 10 MB e 20 páginas. Não há OCR.
+- Nutrientes calculados, valores negativos calculados, N e S e todos os dados reconhecidos das tabelas são guardados em `cqbal_dados` (JSON). Valores negativos em campos importáveis são rejeitados.
+- Nome e classificação podem ser revisados. A atualização é escolhida explicitamente por ID. Ela substitui a composição; campos ausentes no relatório ficam em branco. Preço e demais dados do cadastro existente são preservados.
+- Não há comparação aproximada de nomes. Um nome invertido como “Caroço de algodão” pode não coincidir com “Algodão caroço”; para atualizar, selecione explicitamente o cadastro correto.
+- A procedência pode ser consultada/baixada na aba Editar. Ela registra o arquivo, hash SHA256, nome original, categoria, unidades escolhidas, método do NDT, médias, N e S. A data e o responsável permanecem nos campos de cadastro/auditoria e nas observações.
+- Há limite de 45.000 caracteres para armazenar procedência em uma célula. Relatórios maiores são recusados sem gravação.
 
-Para repetir os testes novos na raiz do projeto:
-python -m unittest discover -s tests -p test_ingredient_quality.py -v
+## Estrutura e gravação
 
-Com pytest instalado, execute também a suíte do projeto:
-python -m pytest tests -q
+- Novos campos nutricionais: EE, MM e FB. Aparecem no cadastro, nas restrições dinâmicas e na exportação. Só aparecem na formulação quando há composição declarada.
+- Nova coluna de ingredientes: `cqbal_dados`. EE/MM/FB também entram na estrutura dos itens de dieta.
+- A inicialização acrescenta colunas ausentes ao final dos cabeçalhos Google, sem limpar ou reordenar os registros. Não renomeie os cabeçalhos existentes manualmente.
+- Criação/edição de ingredientes no Google passa a acrescentar/atualizar apenas a linha correspondente. O salvamento lê dados atuais e confirma os valores gravados. A auditoria acrescenta linhas sem regravar a aba inteira.
+- Edição e reativação verificam duplicatas ativas. As mensagens de sucesso persistem após o recarregamento para cadastro manual e CQBAL.
+- O preenchimento automático de nutrientes ao iniciar continua desabilitado.
+- A trava de gravação cobre sessões no mesmo processo. Não é uma transação distribuída: edições simultâneas do mesmo registro em processos distintos ainda exigem coordenação. Outras entidades (dietas e usuários) mantêm suas rotinas anteriores.
+- Se a gravação do ingrediente for confirmada mas a auditoria falhar, o ingrediente é mantido e a falha de auditoria é registrada nos logs. Não se tenta desfazer um ingrediente já confirmado.
+- A precisão visual dos nutrientes nas restrições/resultados e exportações sobe para oito casas para preservar microminerais pequenos. Custos e inclusões mantêm suas regras anteriores.
+- Dietas antigas não são convertidas; confira seus rótulos/unidades antes de reutilizá-las.
+
+## Validação
+
+- 10 testes novos executados: parsing, conversões, campos exatos, lacunas, procedência, rejeição de entradas, PDF digital, gravação Google simulada, cache, duplicatas e evolução de cabeçalho.
+- 1 teste adicional de solver foi incluído, mas não executado aqui porque SciPy não está instalado no ambiente de preparação.
+- 8 testes existentes selecionados executados diretamente: CRUD, Google simulado, inicialização, migração, exportação e apresentação.
+- Parsing conferido nas transcrições dos 35 relatórios extraídos na conversa (1.156 registros) e no PDF real de Algodão — Caroço.
+- Testes de interface Streamlit: prévia e salvamento para Administrador e Formulador, acesso negado a Consulta, mensagem persistente e nenhuma nova gravação em simples recarregamento.
+- Não houve gravação no Google real nem modificação do repositório original. Não foi executada a suíte pytest completa neste ambiente.
+
+Para repetir os testes novos:
+
+`python -m unittest discover -s tests -p "test_cqbal*.py" -v`
+
+Com as dependências completas instaladas, rode também:
+
+`python -m pytest tests -q`
 
 ## Reversão
-Restaure os arquivos de código do backup. Caso volte ao código antigo, restaure também a cópia da aba ou preserve observacoes separadamente: o mecanismo antigo de schema pode remover essa coluna por não reconhecê-la.
 
-originais_sha256.json registra os hashes dos arquivos de origem para conferência; não contém credenciais.
+Restaure o backup do código e das abas. Antes de restaurar a base, preserve os cadastros feitos após a atualização. Versões antigas podem remover colunas que não reconhecem ao regravar tabelas.
+
+`originais_sha256.json` registra os hashes dos arquivos de origem usados para gerar o patch.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import json
 from typing import Any
 
 import pandas as pd
@@ -10,15 +11,19 @@ from ..config import INGREDIENT_COLUMNS, NUTRIENTS
 from ..models import User
 from ..repositories.base import Repository
 from ..ui_helpers import page_header
+from .cqbal import render as render_cqbal
 from ..utils import as_bool, as_float, new_id, normalize_text
 
 
 def render(repository: Repository, user: User) -> None:
     page_header("Ingredientes", "Gerencie alimentos e minerais utilizados nas formulações.")
+    flash = st.session_state.pop("ingredient_flash", None)
+    if flash:
+        st.success(flash)
     ingredients = repository.list_ingredients(active_only=False)
     tabs = ["Consultar"]
     if user.can_edit:
-        tabs.extend(["Novo ingrediente", "Editar", "Importar CSV"])
+        tabs.extend(["Novo ingrediente", "Editar", "Importar CSV", "Importar CQBAL"])
     selected_tabs = st.tabs(tabs)
 
     with selected_tabs[0]:
@@ -34,9 +39,13 @@ def render(repository: Repository, user: User) -> None:
             if duplicate is not None and payload["ativo"]:
                 st.error("Já existe um ingrediente com o mesmo tipo e nome.")
             else:
-                repository.upsert_ingredient(payload, actor=user.email)
-                st.success("Ingrediente cadastrado.")
-                st.rerun()
+                try:
+                    repository.upsert_ingredient(payload, actor=user.email)
+                except Exception as exc:
+                    st.error("Não foi possível concluir o cadastro: " + str(exc))
+                else:
+                    st.session_state["ingredient_flash"] = "Ingrediente cadastrado."
+                    st.rerun()
 
     with selected_tabs[2]:
         if ingredients.empty:
@@ -44,7 +53,7 @@ def render(repository: Repository, user: User) -> None:
         else:
             ids = ingredients["ingredient_id"].astype(str).tolist()
             label_map = {
-                str(row["ingredient_id"]): f"{row['nome']} · {row['tipo']} · {'Ativo' if as_bool(row.get('ativo'), True) else 'Inativo'} · {row['ingredient_id']}"
+                str(row["ingredient_id"]): f"{row['nome']} · {row['tipo']}"
                 for _, row in ingredients.iterrows()
             }
             selected_id = st.selectbox(
@@ -54,6 +63,17 @@ def render(repository: Repository, user: User) -> None:
                 key="edit_ingredient_id",
             )
             existing = ingredients[ingredients["ingredient_id"].astype(str).eq(selected_id)].iloc[0].to_dict()
+            raw_source = existing.get("cqbal_dados")
+            if isinstance(raw_source, str) and raw_source.strip():
+                with st.expander("Procedência e relatório CQBAL original"):
+                    try:
+                        source = json.loads(raw_source)
+                        st.write("Arquivo: " + str(source.get("arquivo", "")))
+                        st.dataframe(pd.DataFrame(source.get("registros", [])), hide_index=True, width="stretch")
+                        st.download_button("Baixar procedência CQBAL", raw_source.encode("utf-8"),
+                                           file_name="cqbal_procedencia.json", mime="application/json", key="cqbal_source_"+selected_id)
+                    except (ValueError, TypeError):
+                        st.warning("Não foi possível exibir a procedência deste cadastro.")
             payload = _ingredient_form(existing, f"edit_{selected_id}")
             if payload is not None:
                 duplicate = _find_duplicate(
@@ -65,20 +85,27 @@ def render(repository: Repository, user: User) -> None:
                 if duplicate is not None and payload["ativo"]:
                     st.error("Já existe outro ingrediente com o mesmo tipo e nome.")
                 else:
-                    repository.upsert_ingredient(payload, actor=user.email)
-                    st.success("Ingrediente atualizado.")
-                    st.rerun()
+                    try:
+                        repository.upsert_ingredient(payload, actor=user.email)
+                    except Exception as exc:
+                        st.error("Não foi possível concluir a edição: " + str(exc))
+                    else:
+                        st.session_state["ingredient_flash"] = "Ingrediente atualizado."
+                        st.rerun()
             active = as_bool(existing.get("ativo"), True)
             if st.button("Inativar" if active else "Reativar", key=f"toggle_{selected_id}"):
                 try:
                     repository.set_ingredient_active(selected_id, not active, actor=user.email)
-                except ValueError as exc:
+                except Exception as exc:
                     st.error(str(exc))
                 else:
                     st.rerun()
 
     with selected_tabs[3]:
         _bulk_import(repository, ingredients, user)
+
+    with selected_tabs[4]:
+        render_cqbal(repository, user)
 
 
 def _list_ingredients(ingredients: pd.DataFrame) -> None:
@@ -95,7 +122,7 @@ def _list_ingredients(ingredients: pd.DataFrame) -> None:
         filtered = filtered[mask]
     if type_filter != "Todos":
         filtered = filtered[filtered["tipo"].astype(str).eq(type_filter)]
-    active_mask = filtered["ativo"].map(lambda value: as_bool(value, True))
+    active_mask = filtered["ativo"].map(lambda value: as_bool(value, True)).astype(bool)
     if status_filter == "Ativos":
         filtered = filtered[active_mask]
     elif status_filter == "Inativos":
@@ -109,6 +136,9 @@ def _list_ingredients(ingredients: pd.DataFrame) -> None:
         "MS",
         "NDT",
         "PB",
+        "EE",
+        "MM",
+        "FB",
         "FDN",
         "FDA",
         "CA",
@@ -151,10 +181,7 @@ def _ingredient_form(existing: dict[str, Any] | None, prefix: str) -> dict[str, 
             value=str(existing.get("qualidade_dados") or ""),
             placeholder="Ex.: NDT precisa ser revisado; valor proveniente de tabela antiga.",
         )
-        observations = st.text_area(
-            "Observações e histórico (não geram alerta)",
-            value=str(existing.get("observacoes") or ""),
-        )
+        observations = st.text_area("Observações e histórico", value=str(existing.get("observacoes") or ""))
         active = st.checkbox("Ativo", value=as_bool(existing.get("ativo"), True))
 
         st.markdown("**Composição nutricional**")
@@ -243,8 +270,10 @@ def _bulk_import(repository: Repository, ingredients: pd.DataFrame, user: User) 
             payload["ingredient_id"] = (
                 duplicate.get("ingredient_id") if duplicate is not None else new_id("ing")
             )
-            if duplicate is not None and "observacoes" not in frame.columns:
-                payload["observacoes"] = duplicate.get("observacoes", "")
+            if duplicate is not None and payload["ativo"]:
+                for field in ("observacoes", "cqbal_dados"):
+                    if field not in frame.columns:
+                        payload[field] = duplicate.get(field, "")
             payload["tipo"] = tipo
             payload["nome"] = nome
             payload["ativo"] = as_bool(row.get("ativo"), True)

@@ -1,8 +1,11 @@
 {
-  "src/config.py": "7a914262e83218c80f8cd6e0bbbf641cea92c2032ef3f37ed9d8fa0cd1b830e2",
-  "src/pages/dashboard.py": "05c9c336835e1ce0409c8e61d0400f999f8aa26ebaa0729746ca66c404ba1820",
+  "src/config.py": "d1b89bf07f0d4dd1cac27f931e52534c72dc801b463ee749eb6156178bfbb6ec",
   "src/pages/ingredients.py": "4987e3d5ced84a80515b4ab97391677ee8b68f36e6046afb13b579907a117774",
-  "src/repositories/tabular.py": "91361b213e20d0ceac543367772d409dcbaeff667bbc0f46070b511b0a089949",
-  "src/repositories/google_sheets.py": "6f75bb85c328ccba47a543092691016282e3c83a48718f159d9ad3e8e4c7db2a",
-  "tests/test_ingredient_backfill.py": "0944ea0e315bde414d45dbb7c180c51e92e6633611523daf4642018cea06826e"
+  "src/repositories/tabular.py": "ad1ad7933dfaed1cc02df256e189da37a71c95c9a99b9adf9d6e40f86e31d4f5",
+  "src/repositories/google_sheets.py": "b9474a427c24221986365d29b892f0f1e9cd3096cd46b1f3e659ecffc022331a",
+  "src/pages/formulation.py": "205d988f7850e155e7ff83c6dd56b5bb9d3724b07753b923a89b99610dee9a32",
+  "src/exports.py": "cf6c85ce1201ec0088f4dad4bf2b9291f75604204ea6e0deb4154044ed238ce7",
+  "requirements.txt": "d82eaccaa8d781c8da7041e92d0c1f02afa8fe9abb145c2914dfeccaeb73ca06",
+  "tests/test_google_repository_integration.py": "86ffa7a3111201846c62153cd428f16f0f4a20d36939cc7a510d79ee390ee0f6",
+  "tests/test_ingredient_backfill.py": "568fe4337a3a5d9add9fc9c9a0a9827ec13377cd4bbf83945613106a48457dfe"
 }

@@ -92,8 +92,10 @@ class TabularRepository(Repository):
         mask = current["ingredient_id"].astype(str).eq(data["ingredient_id"])
         if data["ativo"]:
             self._check_active_duplicate(current, data)
-        if mask.any() and "observacoes" not in payload:
-            data["observacoes"] = current.loc[mask].iloc[0].get("observacoes", "")
+        if mask.any():
+            for field in ("observacoes", "cqbal_dados"):
+                if field not in payload:
+                    data[field] = current.loc[mask].iloc[0].get(field, "")
         action = "atualizar"
         if mask.any():
             idx = current.index[mask][0]

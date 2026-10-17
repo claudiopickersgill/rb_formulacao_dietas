@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import re
 import time
+import threading
+import warnings
+import json
 import unicodedata
 from collections import Counter
 from pathlib import Path
@@ -11,7 +14,7 @@ import pandas as pd
 
 from ..config import INGREDIENT_COLUMNS, NUTRIENT_CODES, TABLE_SCHEMAS
 from ..google_connection import open_spreadsheet
-from ..utils import as_float, dataframe_for_storage, local_now_iso, new_id
+from ..utils import as_bool, as_float, dataframe_for_storage, local_now_iso, new_id
 from .tabular import TabularRepository
 
 T = TypeVar("T")
@@ -25,6 +28,8 @@ class GoogleSheetsRepository(TabularRepository):
     a migração legada copia os ingredientes dessa primeira aba para
     ``rb_ingredientes`` apenas se a tabela nova estiver vazia.
     """
+
+    _ingredient_lock = threading.RLock()
 
     def __init__(
         self,
@@ -106,16 +111,14 @@ class GoogleSheetsRepository(TabularRepository):
         if header == columns:
             return
 
-        # Evolução de schema sem perder colunas conhecidas.
-        existing = (
-            pd.DataFrame([row + [""] * (len(header) - len(row)) for row in values[1:]], columns=header)
-            if len(values) > 1 and header
-            else pd.DataFrame()
-        )
-        for column in columns:
-            if column not in existing.columns:
-                existing[column] = ""
-        self._write_table(name, existing[columns])
+        # Acrescenta colunas ao final sem limpar ou reordenar dados existentes.
+        missing = [column for column in columns if column not in header]
+        if missing:
+            expanded = header + missing
+            if worksheet.col_count < len(expanded):
+                self._call(lambda: worksheet.add_cols(len(expanded) - worksheet.col_count))
+            self._call(lambda: worksheet.update(values=[expanded], range_name="A1", value_input_option="RAW"))
+            self._cache.pop(name, None)
 
     def _read_table(self, name: str) -> pd.DataFrame:
         cached = self._cache.get(name)
@@ -143,6 +146,89 @@ class GoogleSheetsRepository(TabularRepository):
         self._call(worksheet.clear)
         self._call(lambda: worksheet.update(values=values, range_name="A1"))
         self._cache[name] = (time.monotonic(), frame.copy())
+
+    def _fresh_ingredients(self):
+        self._cache.pop("ingredientes", None)
+        return self._normalized("ingredientes").astype(object)
+
+    def upsert_ingredient(self, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+        # Serializa operações no mesmo processo; append do Sheets não apaga outras linhas.
+        with self._ingredient_lock:
+            current = self._fresh_ingredients()
+            ingredient_id = str(payload.get("ingredient_id") or new_id("ing"))
+            matches = current[current["ingredient_id"].astype(str).eq(ingredient_id)]
+            if len(matches) > 1:
+                raise ValueError("ID de ingrediente duplicado; revise a base antes de salvar.")
+            old = matches.iloc[0].to_dict() if len(matches) else {}
+            data = {col: payload.get(col, old.get(col, "")) for col in INGREDIENT_COLUMNS}
+            data.update(ingredient_id=ingredient_id, ativo=as_bool(data.get("ativo"), True),
+                        created_by=old.get("created_by") or payload.get("created_by") or actor,
+                        created_at=old.get("created_at") or payload.get("created_at") or local_now_iso(),
+                        updated_at=local_now_iso())
+            if data["ativo"]:
+                self._check_active_duplicate(current, data)
+            worksheet = self._worksheet("ingredientes")
+            raw = self._call(worksheet.get_all_values)
+            header = raw[0]
+            if any(c not in header for c in INGREDIENT_COLUMNS):
+                raise RuntimeError("Schema desatualizado. Reinicie o aplicativo antes de importar.")
+            positions = [i for i, row in enumerate(raw[1:], 2) if row and str(row[0]) == ingredient_id]
+            if len(positions) > 1:
+                raise ValueError("ID duplicado na planilha.")
+            old_raw = dict(zip(header, raw[positions[0]-1])) if positions else {}
+            complete = {col: data[col] if col in data else old_raw.get(col, "") for col in header}
+            stored = dataframe_for_storage(pd.DataFrame([complete], columns=header)).values.tolist()[0]
+            if positions:
+                row_number = positions[0]
+                self._call(lambda: worksheet.update(values=[stored], range_name=f"A{row_number}:{_column_letter(len(header))}{row_number}", value_input_option="RAW"))
+            else:
+                # Não repete append cegamente após erro de rede: confirma pelo ID.
+                try:
+                    worksheet.append_row(stored, value_input_option="RAW", table_range="A1")
+                except Exception:
+                    check = self._call(worksheet.get_all_values)
+                    if not any(row and str(row[0]) == ingredient_id for row in check[1:]):
+                        raise
+            verified = self._fresh_ingredients()
+            found = verified[verified["ingredient_id"].astype(str).eq(ingredient_id)]
+            if len(found) != 1:
+                raise RuntimeError("Gravação sem confirmação única no Google Sheets.")
+            expected = dataframe_for_storage(pd.DataFrame([data], columns=INGREDIENT_COLUMNS)).iloc[0]
+            actual = dataframe_for_storage(found[INGREDIENT_COLUMNS]).iloc[0]
+            if expected.astype(str).tolist() != actual.astype(str).tolist():
+                # Sheets formata números conforme locale. Compara números por valor.
+                for col in INGREDIENT_COLUMNS:
+                    if col == "ativo" and as_bool(expected[col]) == as_bool(actual[col]):
+                        continue
+                    if str(expected[col]) == str(actual[col]):
+                        continue
+                    left, right = as_float(expected[col]), as_float(actual[col])
+                    if left is None or right is None or abs(left - right) > 1e-10:
+                        raise RuntimeError("Valor divergente após gravação: " + col)
+            try:
+                self.audit(actor, "atualizar" if old else "criar", "ingrediente", ingredient_id, data.get("nome", ""))
+            except Exception as exc:
+                warnings.warn("Ingrediente gravado, mas a auditoria falhou: " + str(exc), RuntimeWarning)
+            return data
+
+    def set_ingredient_active(self, ingredient_id: str, active: bool, actor: str) -> None:
+        current = self._fresh_ingredients()
+        matches = current[current["ingredient_id"].astype(str).eq(str(ingredient_id))]
+        if len(matches) != 1:
+            raise KeyError("Ingrediente não encontrado ou ID duplicado.")
+        payload = matches.iloc[0].to_dict()
+        payload["ativo"] = bool(active)
+        self.upsert_ingredient(payload, actor)
+
+    def audit(self, actor: str, action: str, entity: str, entity_id: str, details: Any) -> None:
+        self._cache.pop("auditoria", None)
+        worksheet = self._worksheet("auditoria")
+        from ..config import AUDIT_COLUMNS
+        record = dict(audit_id=new_id("aud"), timestamp=local_now_iso(), usuario=actor,
+                      acao=action, entidade=entity, entity_id=entity_id,
+                      detalhes=details if isinstance(details, str) else json.dumps(details, ensure_ascii=False))
+        worksheet.append_row([record[c] for c in AUDIT_COLUMNS], value_input_option="RAW", table_range="A1")
+        self._cache.pop("auditoria", None)
 
     def clear_cache(self) -> None:
         self._cache.clear()

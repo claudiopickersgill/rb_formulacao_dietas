@@ -49,7 +49,7 @@ def make_excel_bytes(metadata: dict, items: pd.DataFrame, constraints: pd.DataFr
             {"bold": True, "bg_color": "#D9EAF7", "border": 1, "align": "center"}
         )
         money_fmt = workbook.add_format({"num_format": 'R$ #,##0.0000', "border": 1})
-        number_fmt = workbook.add_format({"num_format": "0.0000", "border": 1})
+        number_fmt = workbook.add_format({"num_format": "0.00000000", "border": 1})
         text_fmt = workbook.add_format({"border": 1})
 
         summary = pd.DataFrame(
@@ -192,7 +192,7 @@ def _number_or_dash(value: object) -> str:
     number = as_float(value)
     if number is None:
         return "—"
-    return f"{number:.4f}".replace(".", ",")
+    return f"{number:.8f}".replace(".", ",")
 
 
 def _table_style() -> TableStyle:

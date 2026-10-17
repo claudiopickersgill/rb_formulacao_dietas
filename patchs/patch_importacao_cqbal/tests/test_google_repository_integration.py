@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import types
 
-from src.config import INGREDIENT_COLUMNS
 from src.repositories import google_sheets as module
 
 
@@ -20,6 +19,13 @@ class FakeWorksheet:
     def __init__(self, title: str, values: list[list[str]] | None = None):
         self.title = title
         self._values = [row[:] for row in (values or [])]
+        self.col_count = max((len(r) for r in self._values), default=10)
+
+    def append_row(self, values, **kwargs):
+        self._values.append(list(values))
+
+    def add_cols(self, count):
+        self.col_count += count
 
     def get_all_values(self):
         return [row[:] for row in self._values]
@@ -27,7 +33,12 @@ class FakeWorksheet:
     def update(self, values=None, range_name=None, *args, **kwargs):
         if values is None and args:
             values = args[0]
-        self._values = [list(row) for row in (values or [])]
+        import re
+        start = int(re.search(r"\d+", range_name or "A1").group()) - 1
+        for offset, row in enumerate(values or []):
+            while len(self._values) <= start + offset:
+                self._values.append([])
+            self._values[start + offset] = list(row)
 
     def format(self, *args, **kwargs):
         return None
@@ -58,13 +69,7 @@ class FakeSpreadsheet:
         return list(self._worksheets.values())
 
 
-def _row(**values):
-    record = {column: "" for column in INGREDIENT_COLUMNS}
-    record.update(values)
-    return [record[column] for column in INGREDIENT_COLUMNS]
-
-
-def test_existing_google_ingredient_blanks_are_preserved_on_initialize(monkeypatch):
+def test_google_repository_creates_prefixed_tabs_and_migrates(monkeypatch):
     fake_gspread = types.SimpleNamespace(
         WorksheetNotFound=FakeWorksheetNotFound,
         exceptions=types.SimpleNamespace(APIError=FakeAPIError),
@@ -74,30 +79,11 @@ def test_existing_google_ingredient_blanks_are_preserved_on_initialize(monkeypat
     legacy = FakeWorksheet(
         "TabelaIngredientes",
         [
-            ["Tipo", "Ingredientes", "Classificação", "MS", "NDT", "PB", "FDN", "FDA", "CA", "P"],
-            ["Alimento", "Milho", "Energético", "86,9", "80", "8", "9,8", "3,6", "0,04", "0,31"],
+            ["Tipo", "Ingredientes", "Classificação", "R$", "MS", "NDT", "PB"],
+            ["Alimento", "Milho", "Energético", "1,50", "88", "80", "9"],
         ],
     )
-    existing = FakeWorksheet(
-        "rb_ingredientes",
-        [
-            INGREDIENT_COLUMNS,
-            _row(
-                ingredient_id="ing_1",
-                tipo="Alimento",
-                nome="Milho",
-                classificacao="Energético",
-                NDT="79",  # valor existente deve ser preservado
-                PB="8",
-                FDN="",
-                FDA="",
-                CA="0",  # zero explícito também deve ser preservado
-                P="",
-                ativo="True",
-            ),
-        ],
-    )
-    spreadsheet = FakeSpreadsheet([legacy, existing])
+    spreadsheet = FakeSpreadsheet([legacy])
     monkeypatch.setattr(module, "open_spreadsheet", lambda *args, **kwargs: spreadsheet)
 
     repository = module.GoogleSheetsRepository(
@@ -108,12 +94,19 @@ def test_existing_google_ingredient_blanks_are_preserved_on_initialize(monkeypat
     )
     repository.initialize()
 
+    assert "rb_ingredientes" in spreadsheet._worksheets
+    assert "rb_dietas" in spreadsheet._worksheets
+    assert legacy.get_all_values()[1][1] == "Milho"  # aba original preservada
+
     ingredients = repository.list_ingredients(active_only=False)
-    milho = ingredients.loc[ingredients["nome"].eq("Milho")].iloc[0]
-    assert float(milho["NDT"]) == 79.0
-    assert milho["FDN"] == ""
-    assert milho["FDA"] == ""
-    assert float(milho["CA"]) == 0.0
-    assert milho["P"] == ""
-    assert repository.ingredient_backfill_summary["executed"] is False
-    assert milho["qualidade_dados"] == ""
+    assert len(ingredients) == 1
+    assert ingredients.loc[0, "nome"] == "Milho"
+    assert float(ingredients.loc[0, "preco_padrao"]) == 1.5
+    assert repository.legacy_migration_summary["executed"] is True
+
+    repository.upsert_ingredient(
+        {"tipo": "Alimento", "nome": "Sorgo", "NDT": 77, "ativo": True},
+        actor="admin@example.com",
+    )
+    names = set(repository.list_ingredients(active_only=False)["nome"].astype(str))
+    assert names == {"Milho", "Sorgo"}

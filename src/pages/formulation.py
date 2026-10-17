@@ -170,8 +170,8 @@ def render(repository: Repository, user: User) -> None:
                     "nutriente": st.column_config.TextColumn(
                         "Nutriente", disabled=True, width="medium"
                     ),
-                    "minimo": st.column_config.NumberColumn("Mínimo", step=0.01, format="%.4f"),
-                    "maximo": st.column_config.NumberColumn("Máximo", step=0.01, format="%.4f"),
+                    "minimo": st.column_config.NumberColumn("Mínimo", step=0.000001, format="%.8f"),
+                    "maximo": st.column_config.NumberColumn("Máximo", step=0.000001, format="%.8f"),
                 },
             )
             constraints["nutriente"] = constraints["nutriente"].replace({"Ca": "CA"})
@@ -488,11 +488,11 @@ def _render_result(
                 "nutriente": "Código",
                 "descricao": "Nutriente",
                 "unidade": "Unidade",
-                "minimo": st.column_config.NumberColumn("Mínimo", format="%.4f"),
-                "resultado": st.column_config.NumberColumn("Resultado", format="%.4f"),
-                "maximo": st.column_config.NumberColumn("Máximo", format="%.4f"),
+                "minimo": st.column_config.NumberColumn("Mínimo", format="%.8f"),
+                "resultado": st.column_config.NumberColumn("Resultado", format="%.8f"),
+                "maximo": st.column_config.NumberColumn("Máximo", format="%.8f"),
                 "limite_proximo": "Limite mais próximo",
-                "margem_limite": st.column_config.NumberColumn("Margem", format="%.4f"),
+                "margem_limite": st.column_config.NumberColumn("Margem", format="%.8f"),
                 "situacao_visual": "Situação",
             },
         )

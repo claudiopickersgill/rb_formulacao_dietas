@@ -404,6 +404,35 @@ def _render_result(
         st.error(result.message)
         for diagnostic in result.diagnostics:
             st.write(f"• {diagnostic}")
+        if not is_current:
+            st.warning("Esta prévia corresponde ao cálculo anterior. Os ingredientes ou limites foram alterados; calcule novamente.")
+        if result.raw.get("diagnostic_preview") and not result.items.empty:
+            st.subheader("Prévia de diagnóstico")
+            st.warning("Esta mistura é uma simulação e não atende a todas as restrições. Não pode ser salva como dieta aprovada.")
+            st.caption("A simulação mantém os limites de inclusão e a soma de 100%, minimizando a soma dos desvios relativos dos limites nutricionais. Ela não otimiza o custo e não é uma recomendação de fornecimento.")
+            c1, c2 = st.columns(2)
+            c1.metric("Soma da mistura simulada", f"{result.items['inclusao_calculada'].sum():.4f}%")
+            c2.metric("Custo simulado/kg", format_brl(result.cost_per_kg, 4))
+            nutrients_tab, mix_tab = st.tabs(["Teores simulados", "Mistura simulada"])
+            with nutrients_tab:
+                st.dataframe(result.constraints, hide_index=True, width="stretch", column_config={
+                    "nutriente": "Código", "descricao": "Nutriente", "unidade": "Unidade",
+                    "minimo": st.column_config.NumberColumn("Mínimo solicitado", format="%.8f"),
+                    "resultado": st.column_config.NumberColumn("Teor simulado", format="%.8f"),
+                    "maximo": st.column_config.NumberColumn("Máximo solicitado", format="%.8f"),
+                    "falta_minimo": st.column_config.NumberColumn("Falta para o mínimo", format="%.8f"),
+                    "excesso_maximo": st.column_config.NumberColumn("Excesso sobre o máximo", format="%.8f"),
+                    "situacao": "Situação",
+                })
+            with mix_tab:
+                columns = [c for c in ["nome", "preco_kg", "inclusao_min", "inclusao_max", "inclusao_calculada", "custo_parcial"] if c in result.items]
+                st.dataframe(result.items[columns], hide_index=True, width="stretch", column_config={
+                    "nome": "Ingrediente",
+                    "inclusao_calculada": st.column_config.NumberColumn("Inclusão simulada (%)", format="%.6f"),
+                    "inclusao_min": "Inclusão mínima (%)", "inclusao_max": "Inclusão máxima (%)",
+                    "preco_kg": st.column_config.NumberColumn("Preço/kg", format="R$ %.4f"),
+                    "custo_parcial": st.column_config.NumberColumn("Custo parcial", format="R$ %.4f"),
+                })
         return
 
     if not is_current:

@@ -143,6 +143,78 @@ def estimate_achievable_ranges(
     return ranges
 
 
+def diagnostic_preview(work: pd.DataFrame, constraints: pd.DataFrame) -> SolverResult:
+    """Mistura de diagnóstico: minimiza desvios nutricionais relativos.
+
+    Inclusões e soma 100% são rígidas. Cada limite nutricional recebe uma
+    folga não negativa, normalizada pela magnitude dos limites do nutriente.
+    O objetivo não é custo mínimo e não constitui dieta aprovada.
+    """
+    active = _active_constraints(constraints)
+    a_ub, b_ub = _constraint_matrices(work, active)
+    if not a_ub:
+        return SolverResult(False, "sem_previa", "Sem restrições nutricionais para simular.")
+    scales = []
+    for _, row in active.iterrows():
+        minimum, maximum = as_float(row.get("minimo")), as_float(row.get("maximo"))
+        magnitude = max(abs(minimum or 0), abs(maximum or 0))
+        # Para limites explicitamente iguais a zero, usa a escala da composição.
+        if magnitude == 0:
+            vector = _nutrient_vector(work, str(row["nutriente"]))
+            magnitude = max(float(np.max(np.abs(vector))), 1e-8)
+        if maximum is not None:
+            scales.append(magnitude)
+        if minimum is not None:
+            scales.append(magnitude)
+    scale = np.asarray(scales, dtype=float)
+    n, m = len(work), len(a_ub)
+    matrix = np.hstack([np.vstack(a_ub) / scale[:, None], -np.eye(m)])
+    rhs = np.asarray(b_ub, dtype=float) / scale
+    result = linprog(
+        np.r_[np.zeros(n), np.ones(m)],
+        A_ub=matrix, b_ub=rhs,
+        A_eq=np.array([[*np.ones(n), *np.zeros(m)]]), b_eq=np.array([100.0]),
+        bounds=[*_bounds(work), *[(0, None) for _ in range(m)]],
+        method="highs", options={"presolve": True},
+    )
+    if not result.success:
+        return SolverResult(False, "sem_previa", "Não foi possível simular mantendo os limites de inclusão e a soma de 100%.")
+    inclusion = np.asarray(result.x[:n], dtype=float)
+    if not np.isfinite(inclusion).all() or not math.isclose(float(inclusion.sum()), 100, abs_tol=1e-5):
+        return SolverResult(False, "sem_previa", "A simulação não passou pela conferência numérica.")
+    for value, (low, high) in zip(inclusion, _bounds(work)):
+        if value < low - 1e-6 or value > high + 1e-6:
+            return SolverResult(False, "sem_previa", "A simulação não respeitou os limites de inclusão.")
+    simulated = work.copy()
+    simulated["inclusao_calculada"] = inclusion
+    prices = numeric_series(simulated["preco_kg"]).to_numpy(dtype=float)
+    simulated["custo_parcial"] = prices * inclusion / 100
+    evaluations = []
+    for _, row in constraints.drop_duplicates(subset=["nutriente"]).iterrows():
+        code = str(row["nutriente"])
+        if code not in NUTRIENT_BY_CODE:
+            continue
+        vector = _nutrient_vector(simulated, code)
+        minimum, maximum = as_float(row.get("minimo")), as_float(row.get("maximo"))
+        achieved = float(np.dot(vector, inclusion) / 100) if np.isfinite(vector).all() else None
+        deficit = max(0.0, minimum - achieved) if minimum is not None and achieved is not None else 0.0
+        excess = max(0.0, achieved - maximum) if maximum is not None and achieved is not None else 0.0
+        tolerance = max(1e-10, abs(achieved or 0) * 1e-7)
+        status = ("Dados incompletos" if achieved is None else
+                  "Sem restrição" if minimum is None and maximum is None else
+                  "Fora do limite" if deficit > tolerance or excess > tolerance else "Atendida")
+        evaluations.append(dict(nutriente=code, descricao=NUTRIENT_BY_CODE[code].label,
+                                unidade=NUTRIENT_BY_CODE[code].unit, minimo=minimum,
+                                resultado=achieved, maximo=maximum,
+                                falta_minimo=None if achieved is None else deficit,
+                                excesso_maximo=None if achieved is None else excess,
+                                situacao=status))
+    return SolverResult(False, "previa_diagnostico", "Simulação com restrições nutricionais flexibilizadas.",
+                        cost_per_kg=float(np.dot(prices, inclusion)/100), items=simulated,
+                        constraints=pd.DataFrame(evaluations),
+                        raw={"objective": float(result.fun), "method": "desvios_relativos"})
+
+
 def solve_least_cost(items: pd.DataFrame, constraints: pd.DataFrame) -> SolverResult:
     validation = validate_formulation(items, constraints)
     if not validation.valid:
@@ -247,12 +319,24 @@ def solve_least_cost(items: pd.DataFrame, constraints: pd.DataFrame) -> SolverRe
             diagnostics.append(
                 "As restrições podem ser individualmente possíveis, mas incompatíveis quando aplicadas em conjunto."
             )
+        preview = None
+        if result.status == 2:
+            try:
+                preview = diagnostic_preview(work, constraints)
+            except Exception as exc:
+                diagnostics.append("Prévia de diagnóstico indisponível: " + str(exc))
+            if preview is not None and preview.items.empty:
+                diagnostics.append(preview.message)
         return SolverResult(
             success=False,
             status="inviavel" if result.status == 2 else "falha_solver",
             message="Não foi encontrada uma solução que atenda simultaneamente às restrições.",
             diagnostics=diagnostics + validation.warnings,
-            raw={"status": int(result.status), "message": str(result.message)},
+            items=preview.items if preview is not None else pd.DataFrame(),
+            constraints=preview.constraints if preview is not None else pd.DataFrame(),
+            cost_per_kg=preview.cost_per_kg if preview is not None else None,
+            raw={"status": int(result.status), "message": str(result.message),
+                 "diagnostic_preview": preview is not None and not preview.items.empty},
         )
 
     inclusion = np.asarray(result.x, dtype=float)

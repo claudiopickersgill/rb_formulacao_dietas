@@ -1,11 +1,4 @@
 {
-  "src/config.py": "d1b89bf07f0d4dd1cac27f931e52534c72dc801b463ee749eb6156178bfbb6ec",
-  "src/pages/ingredients.py": "4987e3d5ced84a80515b4ab97391677ee8b68f36e6046afb13b579907a117774",
-  "src/repositories/tabular.py": "ad1ad7933dfaed1cc02df256e189da37a71c95c9a99b9adf9d6e40f86e31d4f5",
-  "src/repositories/google_sheets.py": "b9474a427c24221986365d29b892f0f1e9cd3096cd46b1f3e659ecffc022331a",
-  "src/pages/formulation.py": "205d988f7850e155e7ff83c6dd56b5bb9d3724b07753b923a89b99610dee9a32",
-  "src/exports.py": "cf6c85ce1201ec0088f4dad4bf2b9291f75604204ea6e0deb4154044ed238ce7",
-  "requirements.txt": "d82eaccaa8d781c8da7041e92d0c1f02afa8fe9abb145c2914dfeccaeb73ca06",
-  "tests/test_google_repository_integration.py": "86ffa7a3111201846c62153cd428f16f0f4a20d36939cc7a510d79ee390ee0f6",
-  "tests/test_ingredient_backfill.py": "568fe4337a3a5d9add9fc9c9a0a9827ec13377cd4bbf83945613106a48457dfe"
+  "src/solver.py": "2584a19cc909ddcc0baa27410261a494589406dc577a031161ca8cc42c3ce235",
+  "src/pages/formulation.py": "9ddd4a9836f28f63e3c6a60904f6efe952839777e464da5a293fec56c5f760c9"
 }

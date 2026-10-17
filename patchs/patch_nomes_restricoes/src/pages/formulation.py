@@ -159,22 +159,29 @@ def render(repository: Repository, user: User) -> None:
             constraints = constraints_input.copy()
         else:
             constraints_input = constraints_input.copy()
-            constraints_input["nutriente"] = constraints_input["nutriente"].replace({"CA": "Ca"})
+            # Somente a apresentação usa nomes completos; os cálculos usam os códigos.
+            nutrient_labels = {
+                code: f"{nutrient.label} - {'Ca' if code == 'CA' else code} ({nutrient.unit})"
+                for code, nutrient in NUTRIENT_BY_CODE.items()
+            }
+            constraints_input["nutriente"] = constraints_input["nutriente"].replace(nutrient_labels)
             constraints = st.data_editor(
                 constraints_input,
                 hide_index=True,
                 width="stretch",
                 num_rows="fixed",
-                key=constraints_editor_key,
+                key=constraints_editor_key + "_nomes_completos_v1",
                 column_config={
                     "nutriente": st.column_config.TextColumn(
-                        "Nutriente", disabled=True, width="medium"
+                        "Nutriente", disabled=True, width="large"
                     ),
                     "minimo": st.column_config.NumberColumn("Mínimo", step=0.000001, format="%.8f"),
                     "maximo": st.column_config.NumberColumn("Máximo", step=0.000001, format="%.8f"),
                 },
             )
-            constraints["nutriente"] = constraints["nutriente"].replace({"Ca": "CA"})
+            constraints["nutriente"] = constraints["nutriente"].replace(
+                {label: code for code, label in nutrient_labels.items()}
+            )
 
         st.caption(
             "A lista é montada automaticamente com os nutrientes presentes nos ingredientes selecionados. "

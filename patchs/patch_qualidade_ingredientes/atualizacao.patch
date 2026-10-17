@@ -1,0 +1,368 @@
+--- a/src/config.py
++++ b/src/config.py
+@@ -59,6 +59,7 @@
+     *NUTRIENT_CODES,
+     "ativo",
+     "qualidade_dados",
++    "observacoes",
+     "created_by",
+     "created_at",
+     "updated_at",
+--- a/src/pages/dashboard.py
++++ b/src/pages/dashboard.py
+@@ -4,6 +4,7 @@
+ import streamlit as st
+ 
+ from ..models import User
++from ..ingredient_quality import active_quality_warnings
+ from ..repositories.base import Repository
+ from ..ui_helpers import go_to, page_header
+ from ..utils import as_bool, format_brl, numeric_series
+@@ -15,12 +16,13 @@
+     diets = repository.list_diets(user.email, user.perfil)
+ 
+     active_count = 0 if ingredients.empty else int(ingredients["ativo"].map(lambda v: as_bool(v, True)).sum())
+-    warning_count = 0 if ingredients.empty else int(ingredients["qualidade_dados"].fillna("").astype(str).str.strip().ne("").sum())
++    warnings = active_quality_warnings(ingredients)
++    warning_count = len(warnings)
+     avg_cost = numeric_series(diets.get("custo_kg", pd.Series(dtype=float))).mean()
+ 
+     c1, c2, c3, c4 = st.columns(4)
+     c1.metric("Ingredientes ativos", active_count)
+-    c2.metric("Alertas na base", warning_count)
++    c2.metric("Ativos com pendências", warning_count)
+     c3.metric("Dietas salvas", len(diets))
+     c4.metric("Custo médio/kg", format_brl(avg_cost, 4))
+ 
+@@ -70,11 +72,9 @@
+     with right:
+         st.subheader("Qualidade dos cadastros")
+         if warning_count == 0:
+-            st.success("Nenhum alerta cadastral foi identificado.")
++            st.success("Nenhum ingrediente ativo com pendência cadastrada.")
+         else:
+-            warnings = ingredients[
+-                ingredients["qualidade_dados"].fillna("").astype(str).str.strip().ne("")
+-            ][["nome", "qualidade_dados"]].head(10)
+-            st.warning(f"Há {warning_count} ingredientes com observações de qualidade.")
++            warnings = warnings[["nome", "qualidade_dados"]]
++            st.warning(f"Há {warning_count} ingredientes ativos com pendências de qualidade.")
+             st.dataframe(warnings, hide_index=True, width="stretch")
+             st.caption("Revise esses registros antes de usá-los em restrições nutricionais críticas.")
+--- a/src/pages/ingredients.py
++++ b/src/pages/ingredients.py
+@@ -31,7 +31,7 @@
+         payload = _ingredient_form(None, "new")
+         if payload is not None:
+             duplicate = _find_duplicate(ingredients, payload["tipo"], payload["nome"])
+-            if duplicate is not None:
++            if duplicate is not None and payload["ativo"]:
+                 st.error("Já existe um ingrediente com o mesmo tipo e nome.")
+             else:
+                 repository.upsert_ingredient(payload, actor=user.email)
+@@ -44,7 +44,7 @@
+         else:
+             ids = ingredients["ingredient_id"].astype(str).tolist()
+             label_map = {
+-                str(row["ingredient_id"]): f"{row['nome']} · {row['tipo']}"
++                str(row["ingredient_id"]): f"{row['nome']} · {row['tipo']} · {'Ativo' if as_bool(row.get('ativo'), True) else 'Inativo'} · {row['ingredient_id']}"
+                 for _, row in ingredients.iterrows()
+             }
+             selected_id = st.selectbox(
+@@ -62,7 +62,7 @@
+                     payload["nome"],
+                     ignore_id=selected_id,
+                 )
+-                if duplicate is not None:
++                if duplicate is not None and payload["ativo"]:
+                     st.error("Já existe outro ingrediente com o mesmo tipo e nome.")
+                 else:
+                     repository.upsert_ingredient(payload, actor=user.email)
+@@ -70,8 +70,12 @@
+                     st.rerun()
+             active = as_bool(existing.get("ativo"), True)
+             if st.button("Inativar" if active else "Reativar", key=f"toggle_{selected_id}"):
+-                repository.set_ingredient_active(selected_id, not active, actor=user.email)
+-                st.rerun()
++                try:
++                    repository.set_ingredient_active(selected_id, not active, actor=user.email)
++                except ValueError as exc:
++                    st.error(str(exc))
++                else:
++                    st.rerun()
+ 
+     with selected_tabs[3]:
+         _bulk_import(repository, ingredients, user)
+@@ -111,6 +115,7 @@
+         "P",
+         "ativo",
+         "qualidade_dados",
++        "observacoes",
+     ]
+     st.dataframe(filtered[visible], hide_index=True, width="stretch", height=500)
+     st.caption(f"{len(filtered)} registro(s) exibido(s).")
+@@ -146,6 +151,10 @@
+             value=str(existing.get("qualidade_dados") or ""),
+             placeholder="Ex.: NDT precisa ser revisado; valor proveniente de tabela antiga.",
+         )
++        observations = st.text_area(
++            "Observações e histórico (não geram alerta)",
++            value=str(existing.get("observacoes") or ""),
++        )
+         active = st.checkbox("Ativo", value=as_bool(existing.get("ativo"), True))
+ 
+         st.markdown("**Composição nutricional**")
+@@ -184,6 +193,7 @@
+         "preco_padrao": parsed_price,
+         "ativo": active,
+         "qualidade_dados": quality.strip(),
++        "observacoes": observations.strip(),
+         "created_by": existing.get("created_by", ""),
+         "created_at": existing.get("created_at", ""),
+     }
+@@ -233,6 +243,8 @@
+             payload["ingredient_id"] = (
+                 duplicate.get("ingredient_id") if duplicate is not None else new_id("ing")
+             )
++            if duplicate is not None and "observacoes" not in frame.columns:
++                payload["observacoes"] = duplicate.get("observacoes", "")
+             payload["tipo"] = tipo
+             payload["nome"] = nome
+             payload["ativo"] = as_bool(row.get("ativo"), True)
+@@ -280,7 +292,8 @@
+ ) -> dict[str, Any] | None:
+     if ingredients.empty:
+         return None
+-    mask = ingredients["tipo"].map(normalize_text).eq(normalize_text(tipo))
++    mask = ingredients["ativo"].map(lambda v: as_bool(v, True))
++    mask &= ingredients["tipo"].map(normalize_text).eq(normalize_text(tipo))
+     mask &= ingredients["nome"].map(normalize_text).eq(normalize_text(nome))
+     if ignore_id:
+         mask &= ~ingredients["ingredient_id"].astype(str).eq(str(ignore_id))
+--- a/src/repositories/tabular.py
++++ b/src/repositories/tabular.py
+@@ -18,6 +18,7 @@
+ )
+ from ..utils import as_bool, local_now_iso, new_id, normalize_text, timestamp_to_local_iso
+ from .base import Repository
++from ..ingredient_quality import classify_ingredient_notes
+ 
+ 
+ class TabularRepository(Repository):
+@@ -73,7 +74,7 @@
+         return frame[schema]
+ 
+     def list_ingredients(self, active_only: bool = True) -> pd.DataFrame:
+-        frame = self._normalized("ingredientes")
++        frame = classify_ingredient_notes(self._normalized("ingredientes"))
+         if active_only and not frame.empty:
+             frame = frame[frame["ativo"].map(lambda value: as_bool(value, True))]
+         return frame.sort_values(["tipo", "nome"], na_position="last").reset_index(drop=True)
+@@ -87,8 +88,12 @@
+         data["created_at"] = str(payload.get("created_at") or now)
+         data["updated_at"] = now
+ 
+-        current = self._normalized("ingredientes")
++        current = self._normalized("ingredientes").astype(object)
+         mask = current["ingredient_id"].astype(str).eq(data["ingredient_id"])
++        if data["ativo"]:
++            self._check_active_duplicate(current, data)
++        if mask.any() and "observacoes" not in payload:
++            data["observacoes"] = current.loc[mask].iloc[0].get("observacoes", "")
+         action = "atualizar"
+         if mask.any():
+             idx = current.index[mask][0]
+@@ -107,10 +112,21 @@
+         mask = current["ingredient_id"].astype(str).eq(str(ingredient_id))
+         if not mask.any():
+             raise KeyError(f"Ingrediente não encontrado: {ingredient_id}")
++        if active:
++            self._check_active_duplicate(current, current.loc[mask].iloc[0].to_dict())
+         current.loc[mask, "ativo"] = bool(active)
+         current.loc[mask, "updated_at"] = local_now_iso()
+         self._write_table("ingredientes", current)
+         self.audit(actor, "ativar" if active else "inativar", "ingrediente", ingredient_id, "")
++
++    @staticmethod
++    def _check_active_duplicate(current: pd.DataFrame, data: dict[str, Any]) -> None:
++        mask = current["ativo"].map(lambda v: as_bool(v, True))
++        mask &= current["tipo"].map(normalize_text).eq(normalize_text(data.get("tipo")))
++        mask &= current["nome"].map(normalize_text).eq(normalize_text(data.get("nome")))
++        mask &= ~current["ingredient_id"].astype(str).eq(str(data.get("ingredient_id", "")))
++        if mask.any():
++            raise ValueError("Já existe um ingrediente ativo com o mesmo tipo e nome.")
+ 
+     def list_users(self) -> pd.DataFrame:
+         frame = self._normalized("usuarios")
+--- a/src/repositories/google_sheets.py
++++ b/src/repositories/google_sheets.py
+@@ -57,13 +57,11 @@
+         super().initialize()
+         if self.auto_migrate_legacy:
+             self._migrate_legacy_ingredients_if_needed()
+-        # Corrige de forma conservadora bases rb_ingredientes criadas por
+-        # versões anteriores do app. Somente células nutricionais realmente
+-        # vazias são preenchidas; valores já existentes (inclusive zero) nunca
+-        # são sobrescritos. A referência preferencial é a aba legada do próprio
+-        # Google Sheets e, como fallback, a base original v1.2 empacotada em
+-        # data/seed_ingredientes.csv.
+-        self._backfill_missing_ingredient_nutrients()
++        # Valores vazios podem ser desconhecidos por decisão do formulador.
++        # Complementação deve ser explícita, nunca executada ao iniciar o app.
++        self.ingredient_backfill_summary = {
++            "executed": False, "reason": "Complementação automática desabilitada."
++        }
+ 
+     def _tab_name(self, logical_name: str) -> str:
+         return f"{self.table_prefix}{logical_name}"
+@@ -110,7 +108,7 @@
+ 
+         # Evolução de schema sem perder colunas conhecidas.
+         existing = (
+-            pd.DataFrame(values[1:], columns=header)
++            pd.DataFrame([row + [""] * (len(header) - len(row)) for row in values[1:]], columns=header)
+             if len(values) > 1 and header
+             else pd.DataFrame()
+         )
+@@ -131,7 +129,7 @@
+         else:
+             header = [str(value).strip() for value in values[0]]
+             rows = values[1:]
+-            frame = pd.DataFrame(rows, columns=header)
++            frame = pd.DataFrame([row + [""] * (len(header) - len(row)) for row in rows], columns=header)
+         self._cache[name] = (time.monotonic(), frame.copy())
+         return frame
+ 
+@@ -324,11 +322,11 @@
+         for idx in rows_changed:
+             if "updated_at" in repaired.columns:
+                 repaired.at[idx, "updated_at"] = now
+-            if "qualidade_dados" in repaired.columns:
+-                note = str(repaired.at[idx, "qualidade_dados"] or "").strip()
++            if "observacoes" in repaired.columns:
++                note = str(repaired.at[idx, "observacoes"] or "").strip()
+                 repair_note = "Composição nutricional complementada automaticamente a partir da base original."
+                 if repair_note not in note:
+-                    repaired.at[idx, "qualidade_dados"] = (note + "; " + repair_note).strip("; ")
++                    repaired.at[idx, "observacoes"] = (note + "; " + repair_note).strip("; ")
+ 
+         self._write_table("ingredientes", repaired[INGREDIENT_COLUMNS])
+         self.ingredient_backfill_summary = {
+--- a/tests/test_ingredient_backfill.py
++++ b/tests/test_ingredient_backfill.py
+@@ -64,7 +64,7 @@
+     return [record[column] for column in INGREDIENT_COLUMNS]
+ 
+ 
+-def test_existing_google_ingredient_blanks_are_backfilled_without_overwriting(monkeypatch):
++def test_existing_google_ingredient_blanks_are_preserved_on_initialize(monkeypatch):
+     fake_gspread = types.SimpleNamespace(
+         WorksheetNotFound=FakeWorksheetNotFound,
+         exceptions=types.SimpleNamespace(APIError=FakeAPIError),
+@@ -111,9 +111,9 @@
+     ingredients = repository.list_ingredients(active_only=False)
+     milho = ingredients.loc[ingredients["nome"].eq("Milho")].iloc[0]
+     assert float(milho["NDT"]) == 79.0
+-    assert float(milho["FDN"]) == 9.8
+-    assert float(milho["FDA"]) == 3.6
++    assert milho["FDN"] == ""
++    assert milho["FDA"] == ""
+     assert float(milho["CA"]) == 0.0
+-    assert float(milho["P"]) == 0.31
+-    assert repository.ingredient_backfill_summary["executed"] is True
+-    assert repository.ingredient_backfill_summary["cells_filled"] >= 3
++    assert milho["P"] == ""
++    assert repository.ingredient_backfill_summary["executed"] is False
++    assert milho["qualidade_dados"] == ""
+--- /dev/null
++++ b/src/ingredient_quality.py
+@@ -0,0 +1,45 @@
++"""Classificação conservadora das notas legadas, sem gravar na fonte."""
++from __future__ import annotations
++import pandas as pd
++from .utils import as_bool, normalize_text
++
++IMPORT_NOTE = "Composição adicionada da nova tabela recebida; linha interpretada como MS + perfil mineral (Ca, P, Mg, Na, K, Cl, S, Fe, Cu, Mn, Zn, Co, I, Se)."
++BACKFILL_NOTE = "Composição nutricional complementada automaticamente a partir da base original."
++
++def classify_ingredient_notes(frame: pd.DataFrame) -> pd.DataFrame:
++    result = frame.copy()
++    for col in ["qualidade_dados", "observacoes"]:
++        if col not in result:
++            result[col] = ""
++        result[col] = result[col].fillna("").astype(str)
++    if result.empty:
++        return result
++    active = result["ativo"].map(lambda v: as_bool(v, True))
++    keys = result["tipo"].map(normalize_text) + "|" + result["nome"].map(normalize_text)
++    counts = keys[active].value_counts()
++    for idx, row in result.iterrows():
++        note = row["qualidade_dados"].strip()
++        historical = not active.loc[idx] and (
++            note.startswith("Duplicata desativada na migração; mantida para preservar o ID histórico. Registro ativo equivalente: linha ")
++            or note == "Ausente na nova tabela recebida; desativado sem exclusão para preservar histórico."
++        )
++        resolved = note == "Nome duplicado na planilha legada" and counts.get(keys.loc[idx], 0) == 1
++        informative = note == IMPORT_NOTE and str(row.get("created_by", "")) == "migracao_etapa2"
++        moved = note if historical or resolved or informative else ""
++        if not moved and BACKFILL_NOTE in note:
++            # Retira só a frase conhecida; preserva qualquer outra pendência.
++            moved = BACKFILL_NOTE
++            note = note.replace(BACKFILL_NOTE, "").strip("; ")
++        elif moved:
++            note = ""
++        if moved:
++            old = row["observacoes"].strip()
++            result.at[idx, "observacoes"] = old if moved in old else "\n".join(filter(None, [old, moved]))
++            result.at[idx, "qualidade_dados"] = note
++    return result
++
++def active_quality_warnings(frame: pd.DataFrame) -> pd.DataFrame:
++    frame = classify_ingredient_notes(frame)
++    if frame.empty:
++        return frame
++    return frame[frame["ativo"].map(lambda v: as_bool(v, True)) & frame["qualidade_dados"].str.strip().ne("")].copy()
+--- /dev/null
++++ b/tests/test_ingredient_quality.py
+@@ -0,0 +1,41 @@
++import unittest
++import tempfile
++import pandas as pd
++from src.ingredient_quality import classify_ingredient_notes, active_quality_warnings, IMPORT_NOTE
++from src.repositories.local import LocalRepository
++
++class QualityTests(unittest.TestCase):
++    def test_classification_is_conservative_and_idempotent(self):
++        rows = pd.DataFrame([
++            dict(ingredient_id="a", tipo="Mineral", nome="Sal", ativo="TRUE", qualidade_dados="Nome duplicado na planilha legada"),
++            dict(ingredient_id="b", tipo="Mineral", nome="Sal", ativo=False, qualidade_dados="Duplicata desativada na migração; mantida para preservar o ID histórico. Registro ativo equivalente: linha 2."),
++            dict(ingredient_id="c", tipo="Mineral", nome="Produto", ativo=True, qualidade_dados=IMPORT_NOTE, created_by="migracao_etapa2"),
++            dict(ingredient_id="d", tipo="Mineral", nome="Parcial", ativo=True, qualidade_dados="Composição parcial"),
++            dict(ingredient_id="e", tipo="Mineral", nome="Revisar", ativo=True, qualidade_dados="Novo alerta"),
++        ])
++        result = classify_ingredient_notes(rows)
++        self.assertEqual(len(active_quality_warnings(result)), 2)
++        self.assertEqual(result["observacoes"].str.strip().ne("").sum(), 3)
++        pd.testing.assert_frame_equal(result, classify_ingredient_notes(result))
++        rows.loc[1, "ativo"] = True
++        self.assertIn("a", active_quality_warnings(rows)["ingredient_id"].tolist())
++
++    def test_duplicate_edit_and_reactivation(self):
++        with tempfile.TemporaryDirectory() as folder:
++            repository = LocalRepository(folder)
++            repository.initialize()
++            active = repository.upsert_ingredient(dict(tipo="Mineral", nome="Sal", ativo=True, observacoes="Histórico"), "teste")
++            inactive = repository.upsert_ingredient(dict(tipo="Mineral", nome="Sal", ativo=False), "teste")
++            active.pop("observacoes")
++            repository.upsert_ingredient(active, "teste")
++            self.assertEqual(repository.list_ingredients().iloc[0]["observacoes"], "Histórico")
++            with self.assertRaises(ValueError):
++                repository.set_ingredient_active(inactive["ingredient_id"], True, "teste")
++            with self.assertRaises(ValueError):
++                repository.upsert_ingredient(dict(tipo="Mineral", nome="SAL", ativo=True), "teste")
++            repository.set_ingredient_active(active["ingredient_id"], False, "teste")
++            repository.set_ingredient_active(inactive["ingredient_id"], True, "teste")
++            self.assertEqual(len(repository.list_ingredients()), 1)
++
++if __name__ == "__main__":
++    unittest.main()

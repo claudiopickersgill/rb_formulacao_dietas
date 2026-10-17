@@ -59,6 +59,7 @@ INGREDIENT_COLUMNS = [
     *NUTRIENT_CODES,
     "ativo",
     "qualidade_dados",
+    "observacoes",
     "created_by",
     "created_at",
     "updated_at",

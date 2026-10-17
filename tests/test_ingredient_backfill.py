@@ -64,7 +64,7 @@ def _row(**values):
     return [record[column] for column in INGREDIENT_COLUMNS]
 
 
-def test_existing_google_ingredient_blanks_are_backfilled_without_overwriting(monkeypatch):
+def test_existing_google_ingredient_blanks_are_preserved_on_initialize(monkeypatch):
     fake_gspread = types.SimpleNamespace(
         WorksheetNotFound=FakeWorksheetNotFound,
         exceptions=types.SimpleNamespace(APIError=FakeAPIError),
@@ -111,9 +111,9 @@ def test_existing_google_ingredient_blanks_are_backfilled_without_overwriting(mo
     ingredients = repository.list_ingredients(active_only=False)
     milho = ingredients.loc[ingredients["nome"].eq("Milho")].iloc[0]
     assert float(milho["NDT"]) == 79.0
-    assert float(milho["FDN"]) == 9.8
-    assert float(milho["FDA"]) == 3.6
+    assert milho["FDN"] == ""
+    assert milho["FDA"] == ""
     assert float(milho["CA"]) == 0.0
-    assert float(milho["P"]) == 0.31
-    assert repository.ingredient_backfill_summary["executed"] is True
-    assert repository.ingredient_backfill_summary["cells_filled"] >= 3
+    assert milho["P"] == ""
+    assert repository.ingredient_backfill_summary["executed"] is False
+    assert milho["qualidade_dados"] == ""

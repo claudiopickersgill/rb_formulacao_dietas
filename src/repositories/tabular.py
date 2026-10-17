@@ -18,6 +18,7 @@ from ..config import (
 )
 from ..utils import as_bool, local_now_iso, new_id, normalize_text, timestamp_to_local_iso
 from .base import Repository
+from ..ingredient_quality import classify_ingredient_notes
 
 
 class TabularRepository(Repository):
@@ -73,7 +74,7 @@ class TabularRepository(Repository):
         return frame[schema]
 
     def list_ingredients(self, active_only: bool = True) -> pd.DataFrame:
-        frame = self._normalized("ingredientes")
+        frame = classify_ingredient_notes(self._normalized("ingredientes"))
         if active_only and not frame.empty:
             frame = frame[frame["ativo"].map(lambda value: as_bool(value, True))]
         return frame.sort_values(["tipo", "nome"], na_position="last").reset_index(drop=True)
@@ -87,8 +88,12 @@ class TabularRepository(Repository):
         data["created_at"] = str(payload.get("created_at") or now)
         data["updated_at"] = now
 
-        current = self._normalized("ingredientes")
+        current = self._normalized("ingredientes").astype(object)
         mask = current["ingredient_id"].astype(str).eq(data["ingredient_id"])
+        if data["ativo"]:
+            self._check_active_duplicate(current, data)
+        if mask.any() and "observacoes" not in payload:
+            data["observacoes"] = current.loc[mask].iloc[0].get("observacoes", "")
         action = "atualizar"
         if mask.any():
             idx = current.index[mask][0]
@@ -107,10 +112,21 @@ class TabularRepository(Repository):
         mask = current["ingredient_id"].astype(str).eq(str(ingredient_id))
         if not mask.any():
             raise KeyError(f"Ingrediente não encontrado: {ingredient_id}")
+        if active:
+            self._check_active_duplicate(current, current.loc[mask].iloc[0].to_dict())
         current.loc[mask, "ativo"] = bool(active)
         current.loc[mask, "updated_at"] = local_now_iso()
         self._write_table("ingredientes", current)
         self.audit(actor, "ativar" if active else "inativar", "ingrediente", ingredient_id, "")
+
+    @staticmethod
+    def _check_active_duplicate(current: pd.DataFrame, data: dict[str, Any]) -> None:
+        mask = current["ativo"].map(lambda v: as_bool(v, True))
+        mask &= current["tipo"].map(normalize_text).eq(normalize_text(data.get("tipo")))
+        mask &= current["nome"].map(normalize_text).eq(normalize_text(data.get("nome")))
+        mask &= ~current["ingredient_id"].astype(str).eq(str(data.get("ingredient_id", "")))
+        if mask.any():
+            raise ValueError("Já existe um ingrediente ativo com o mesmo tipo e nome.")
 
     def list_users(self) -> pd.DataFrame:
         frame = self._normalized("usuarios")

@@ -57,13 +57,11 @@ class GoogleSheetsRepository(TabularRepository):
         super().initialize()
         if self.auto_migrate_legacy:
             self._migrate_legacy_ingredients_if_needed()
-        # Corrige de forma conservadora bases rb_ingredientes criadas por
-        # versões anteriores do app. Somente células nutricionais realmente
-        # vazias são preenchidas; valores já existentes (inclusive zero) nunca
-        # são sobrescritos. A referência preferencial é a aba legada do próprio
-        # Google Sheets e, como fallback, a base original v1.2 empacotada em
-        # data/seed_ingredientes.csv.
-        self._backfill_missing_ingredient_nutrients()
+        # Valores vazios podem ser desconhecidos por decisão do formulador.
+        # Complementação deve ser explícita, nunca executada ao iniciar o app.
+        self.ingredient_backfill_summary = {
+            "executed": False, "reason": "Complementação automática desabilitada."
+        }
 
     def _tab_name(self, logical_name: str) -> str:
         return f"{self.table_prefix}{logical_name}"
@@ -110,7 +108,7 @@ class GoogleSheetsRepository(TabularRepository):
 
         # Evolução de schema sem perder colunas conhecidas.
         existing = (
-            pd.DataFrame(values[1:], columns=header)
+            pd.DataFrame([row + [""] * (len(header) - len(row)) for row in values[1:]], columns=header)
             if len(values) > 1 and header
             else pd.DataFrame()
         )
@@ -131,7 +129,7 @@ class GoogleSheetsRepository(TabularRepository):
         else:
             header = [str(value).strip() for value in values[0]]
             rows = values[1:]
-            frame = pd.DataFrame(rows, columns=header)
+            frame = pd.DataFrame([row + [""] * (len(header) - len(row)) for row in rows], columns=header)
         self._cache[name] = (time.monotonic(), frame.copy())
         return frame
 
@@ -324,11 +322,11 @@ class GoogleSheetsRepository(TabularRepository):
         for idx in rows_changed:
             if "updated_at" in repaired.columns:
                 repaired.at[idx, "updated_at"] = now
-            if "qualidade_dados" in repaired.columns:
-                note = str(repaired.at[idx, "qualidade_dados"] or "").strip()
+            if "observacoes" in repaired.columns:
+                note = str(repaired.at[idx, "observacoes"] or "").strip()
                 repair_note = "Composição nutricional complementada automaticamente a partir da base original."
                 if repair_note not in note:
-                    repaired.at[idx, "qualidade_dados"] = (note + "; " + repair_note).strip("; ")
+                    repaired.at[idx, "observacoes"] = (note + "; " + repair_note).strip("; ")
 
         self._write_table("ingredientes", repaired[INGREDIENT_COLUMNS])
         self.ingredient_backfill_summary = {

@@ -2,7 +2,7 @@
 
 Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P25 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P26 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
@@ -353,6 +353,22 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Documentação e pacote:** funcionalidades e regras atuais em README.md e docs/CQBAL_PT_EN.md. Pacote `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip`, aplicar após P24. A reinicialização em produção acrescenta as dez colunas, sem reimportar ingredientes. Cadastros importados anteriormente com ZINC ignorado devem ser reimportados explicitamente por ID para recuperar esse valor; somente trocar o código não repara essas composições históricas.
 
+## P26 — Painel administrativo de importação CQBAL — 26/10/2026
+
+**Base:** código local d37c5e7 (Correção ZINC e Mcal), após P25.
+
+**Comportamento:** Administração ganha um painel exclusivo de administradores ativos para selecionar os atributos das próximas importações CQBAL. Os 44 campos anteriores são o padrão. Selecionados e ausentes recebem zero; desmarcados não sobrescrevem valores existentes. Configuração global persistida e auditada, com versão e conferência antes da gravação.
+
+**Referência e catálogo:** Milho Fubá ID 1, com HTML para conferência. União de 2.245 relatórios: 347 campos, 230 presentes no alimento de referência. 144 campos compatíveis com mistura linear (100 adicionais ao cadastro anterior); parâmetros de razões, cinética, pH e unidades não validadas são preservados para conferência e exigem modelos próprios antes de uso como restrição.
+
+**Importador:** aceita JSON completo e HTML de conferência além dos PDFs anteriores. Prévia aplica a seleção global. Novos teores habilitados são persistidos em ingredientes e snapshots de dietas e aparecem nas restrições dinâmicas. Procedência versão 4 preserva a política aplicada e atributos anteriores desmarcados. Siglas ambíguas solicitam o JSON com IDs.
+
+**Schema:** nova tabela cqbal_config (prefixo padrão rb_); 100 colunas adicionais nos schemas de ingredientes e itens de dietas. A migração acrescenta cabeçalhos no Sheets sem preencher retroativamente os valores. Catálogo e referência ficam em src/data. Não há dependência nova nem mudança nas fórmulas do solver linear.
+
+**Validação:** 107 testes aprovados, incluindo permissões no backend, editor administrativo, política compartilhada com Google simulado, importação JSON/HTML, preservação de desmarcados, zeros e novo atributo usado em dieta salva/reaberta. Sem chamadas ao Google real, alterações na base de produção ou publicação. Detalhes em docs/PAINEL_CQBAL.md.
+
+**Pacote:** patch_painel_importacao_cqbal_20261026.zip. README e documentação atualizados. Aplicar como conjunto de arquivos sobre a base indicada; preservar backups de código e abas antes de publicar.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -378,6 +394,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_visual_login_pdf_20261026.zip` | P23 |
 | `patch_cqbal_bilingue_em_aminoacidos_20261026.zip` | P24 |
 | `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip` | P25 |
+| `patch_painel_importacao_cqbal_20261026.zip` | P26 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

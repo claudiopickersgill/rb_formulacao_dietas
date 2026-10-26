@@ -485,12 +485,11 @@ def _convert_legacy_ingredient_values(values: list[list[str]]) -> pd.DataFrame:
             frame[column] = ""
     if "preco_padrao" not in frame.columns:
         frame["preco_padrao"] = None
-    for code in NUTRIENT_CODES:
-        if code not in frame.columns:
-            frame[code] = None
+    frame = frame.reindex(columns=list(dict.fromkeys([*frame.columns, *NUTRIENT_CODES])))
 
     for column in ["preco_padrao", *NUTRIENT_CODES]:
         frame[column] = frame[column].map(lambda value: as_float(value))
+    frame = frame.copy()
 
     duplicate_counts = Counter(
         (_clean_text(row.tipo), _clean_text(row.nome)) for row in frame.itertuples()

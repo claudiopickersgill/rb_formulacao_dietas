@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from abc import abstractmethod
 from typing import Any
 
@@ -23,6 +24,44 @@ from ..ingredient_quality import classify_ingredient_notes
 
 class TabularRepository(Repository):
     """CRUD shared by local CSV and Google Sheets backends."""
+    _cqbal_policy_lock = threading.RLock()
+
+    def get_cqbal_import_policy(self) -> dict:
+        from ..cqbal_catalog import default_policy, validate_selection
+        # Configurações devem ser visíveis na próxima prévia em todas as sessões.
+        if hasattr(self, '_cache'):
+            self._cache.pop('cqbal_config', None)
+        frame = self._normalized('cqbal_config')
+        rows = frame.loc[frame['config_id'].eq('global')]
+        if rows.empty:
+            return default_policy()
+        if len(rows) != 1:
+            raise ValueError('Configuração CQBAL duplicada; revise a base.')
+        row = rows.iloc[0]
+        return dict(version=int(row['version']), selected=validate_selection(json.loads(row['selected_json'])),
+                    updated_by=str(row['updated_by']), updated_at=str(row['updated_at']))
+
+    def save_cqbal_import_policy(self, selected, user, expected_version: int) -> dict:
+        with self._cqbal_policy_lock:
+            return self._save_cqbal_import_policy(selected, user, expected_version)
+
+    def _save_cqbal_import_policy(self, selected, user, expected_version: int) -> dict:
+        from ..cqbal_catalog import validate_selection
+        if not user.is_admin or not user.ativo:
+            raise PermissionError('Apenas administradores ativos podem alterar a importação CQBAL.')
+        selected = validate_selection(selected)
+        current = self.get_cqbal_import_policy()
+        if current['version'] != expected_version:
+            raise ValueError('A configuração foi alterada por outro administrador. Recarregue o painel.')
+        policy = dict(version=current['version'] + 1, selected=selected, updated_by=user.email, updated_at=local_now_iso())
+        row = dict(config_id='global', version=policy['version'], selected_json=json.dumps(selected),
+                   updated_by=policy['updated_by'], updated_at=policy['updated_at'])
+        self._write_table('cqbal_config', pd.DataFrame([row], columns=TABLE_SCHEMAS['cqbal_config']))
+        if self.get_cqbal_import_policy() != policy:
+            raise RuntimeError('Não foi possível confirmar a configuração gravada.')
+        self.audit(user.email, 'configurar', 'cqbal_importacao', str(policy['version']),
+                   dict(antes=current['selected'], depois=selected))
+        return policy
 
     @abstractmethod
     def _ensure_table(self, name: str, columns: list[str]) -> None: ...
@@ -68,10 +107,7 @@ class TabularRepository(Repository):
     def _normalized(self, name: str) -> pd.DataFrame:
         frame = self._read_table(name).copy()
         schema = TABLE_SCHEMAS[name]
-        for col in schema:
-            if col not in frame.columns:
-                frame[col] = None
-        return frame[schema]
+        return frame.reindex(columns=schema)
 
     def list_ingredients(self, active_only: bool = True) -> pd.DataFrame:
         frame = classify_ingredient_notes(self._normalized("ingredientes"))
@@ -251,10 +287,7 @@ class TabularRepository(Repository):
         item_frame = items.copy().reset_index(drop=True)
         item_frame["diet_id"] = diet_id
         item_frame["ordem"] = range(1, len(item_frame) + 1)
-        for col in DIET_ITEM_COLUMNS:
-            if col not in item_frame.columns:
-                item_frame[col] = ""
-        item_rows = item_frame[DIET_ITEM_COLUMNS]
+        item_rows = item_frame.reindex(columns=DIET_ITEM_COLUMNS, fill_value="")
         current_items = item_rows if current_items.empty else pd.concat([current_items, item_rows], ignore_index=True)
         self._write_table("dieta_ingredientes", current_items[DIET_ITEM_COLUMNS])
 

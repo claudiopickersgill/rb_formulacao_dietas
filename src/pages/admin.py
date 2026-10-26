@@ -9,6 +9,7 @@ from ..repositories.base import Repository
 from ..security import hash_password, has_password, validate_password_strength
 from ..ui_helpers import page_header
 from ..utils import as_bool
+from .cqbal_admin import render as render_cqbal_admin
 
 
 def render(repository: Repository, user: User) -> None:
@@ -17,7 +18,9 @@ def render(repository: Repository, user: User) -> None:
         st.error("Apenas administradores podem acessar esta página.")
         return
 
-    users_tab, audit_tab, system_tab = st.tabs(["Usuários", "Auditoria", "Sistema"])
+    users_tab, audit_tab, system_tab, cqbal_tab = st.tabs(["Usuários", "Auditoria", "Sistema", "Painel de Importação CQBAL"])
+    with cqbal_tab:
+        render_cqbal_admin(repository, user)
     with users_tab:
         users = repository.list_users()
         st.dataframe(users, hide_index=True, width="stretch")

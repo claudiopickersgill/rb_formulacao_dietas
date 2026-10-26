@@ -1,3 +1,4 @@
+from src.cqbal_catalog import DEFAULT_CODES
 from io import BytesIO
 import json
 from pathlib import Path
@@ -61,7 +62,7 @@ def test_zinc_aliases_and_conflicts(label):
 
 @pytest.mark.parametrize('uppercase', [False, True])
 def test_twenty_three_letter_codes_import_and_minerals_do_not_collide(uppercase):
-    assert set(AMINO_ACID_CODES) == EXPECTED and len(NUTRIENT_CODES) == 44
+    assert set(AMINO_ACID_CODES) == EXPECTED and len(DEFAULT_CODES) == 44 and set(DEFAULT_CODES) <= set(NUTRIENT_CODES)
     body='\n'.join(f'{code.upper() if uppercase else code} 0.5 2 0.1' for code in sorted(EXPECTED))
     body+='\nP 0.34 1 - K 0.39 1 -\nS 0.2 1 - I 1 1 -\nA 99 1 - R 99 1 - N 99 1 -'
     values, _, missing = convert_report(source(body), '%')

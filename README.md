@@ -9,13 +9,13 @@ Repositório: [claudiopickersgill/rb_formulacao_dietas](https://github.com/claud
 ## Funcionalidades
 
 - **Visão geral:** ingredientes ativos, pendências de qualidade, dietas acessíveis e custos.
-- **Ingredientes:** consulta, cadastro, edição, inativação, reativação e importação por CSV ou PDF do CQBAL em português ou inglês, com aminoácidos e Energia Metabolizável (EM).
+- **Ingredientes:** consulta, cadastro, edição, inativação, reativação e importação por CSV, JSON, HTML de conferência ou PDF do CQBAL em português ou inglês, com aminoácidos e Energia Metabolizável (EM).
 - **Nova formulação:** seleção de ingredientes, preços, limites de inclusão e restrições nutricionais dinâmicas.
 - **Resultado:** composição da mistura, custo, teores nutricionais e comparação com os limites solicitados.
 - **Diagnóstico de inviabilidade:** mensagens de conflito e simulação de uma mistura com restrições nutricionais flexibilizadas.
 - **Dietas salvas:** consulta, continuação da edição, duplicação, comparação e exclusão conforme o perfil.
 - **Exportações:** Excel, PDF e CSV.
-- **Administração:** usuários, auditoria e recursos de diagnóstico do sistema.
+- **Administração:** usuários, auditoria, recursos de diagnóstico e Painel de Importação CQBAL exclusivo de administradores.
 
 ## Perfis de acesso
 
@@ -27,7 +27,7 @@ Repositório: [claudiopickersgill/rb_formulacao_dietas](https://github.com/claud
 | Salvar alterações em dietas | Sim | Sim, conforme propriedade | Não |
 | Acessar dietas | Todas | Próprias | Próprias |
 | Exportar resultados/dietas acessíveis | Sim | Sim | Sim |
-| Gerir usuários e consultar auditoria | Sim | Não | Não |
+| Gerir usuários, consultar auditoria e configurar a importação CQBAL | Sim | Não | Não |
 
 O login do usuário e a conexão com o Google Sheets são independentes. O usuário recebe permissões pelo cadastro; a conta de serviço acessa a planilha.
 
@@ -69,7 +69,7 @@ Os limites nutricionais devem usar as mesmas unidades da composição: uma EM m�
 
 Em **Ingredientes > Importar CQBAL**:
 
-1. Envie o PDF digital do **Relatório Completo** de um único alimento, em português ou inglês. O idioma e as siglas são reconhecidos automaticamente; o nome do alimento é preservado no idioma original e pode ser editado.
+1. Envie preferencialmente o `completo.json` baixado pelo exportador, o HTML de conferência ou o PDF digital do **Relatório Completo** de um único alimento, em português ou inglês. O idioma e as siglas são reconhecidos automaticamente; o nome do alimento é preservado no idioma original e pode ser editado.
 2. Confirme se os macrominerais da fonte estão em `%` ou `g/kg`.
 3. Confira a prévia, incluindo as unidades de cada campo e os zeros por ausência. Confirme aminoácidos em % do alimento e EM de origem Mcal/kg, convertida para kcal/g; o idioma não determina a unidade ou a base seca/natural.
 4. Revise nome, tipo e classificação; escolha cadastrar ou atualizar explicitamente um registro por ID.
@@ -87,28 +87,37 @@ Em **Ingredientes > Importar CQBAL**:
 | Macrominerais em g/kg | Dividir por 10 para armazenar em % |
 | Macrominerais em % | Manter o valor |
 | Microminerais em mg/kg ou ppm | Dividir por 10.000 para armazenar em %; `ZINC` em inglês corresponde a `Zn` |
-| Nutriente sem informação importável | Gravar 0 e identificar o preenchimento na procedência |
+| Atributo selecionado sem informação importável | Gravar 0 e identificar na procedência |
+| Atributo desmarcado no painel | Não importar; preservar o valor anterior em atualizações |
 | Colunas estatísticas N e S e demais dados não mapeados | Preservar na procedência; não converter em teores da dieta |
 
 Exemplos: **12 g/kg = 1,2%**; **50 mg/kg = 0,005%**.
 
 Os valores antigos da base não são reconvertidos: foram considerados já expressos em porcentagem. A regra de preencher ausentes com zero é aplicada à composição importada pelo CQBAL; não é uma limpeza retroativa de todos os cadastros nem dos campos estatísticos N e S.
 
-A atualização de um ingrediente substitui sua composição: nutrientes ausentes no PDF recebem zero. Preço e demais informações existentes são preservados conforme o fluxo de atualização.
+A atualização substitui somente os atributos selecionados no painel: ausentes recebem zero; desmarcados conservam os valores existentes. Preço e demais informações existentes são preservados conforme o fluxo de atualização.
 
-O campo `cqbal_dados` guarda nome original, idioma, arquivo, hash SHA256, categoria original e normalizada, unidades de origem e por campo de destino, métodos de NDT e EM, registros reconhecidos e campos preenchidos com zero. A procedência nova usa versão 3, com origem/destino e fator da conversão energética; os JSON antigos continuam legíveis. A procedência pode ser consultada e baixada na edição do ingrediente.
+O campo `cqbal_dados` guarda o relatório reconhecido, hash, arquivo, política global usada, valores importados, campos ausentes preenchidos com zero e atributos preservados de importações anteriores. A nova procedência usa versão 4 e referencia o catálogo versionado para os nomes e unidades, evitando repetir metadados em cada valor. Os documentos antigos permanecem legíveis. A procedência e os atributos podem ser consultados na edição do ingrediente.
 
-A correspondência validada das siglas e os resultados dos dois relatórios de referência estão em [docs/CQBAL_PT_EN.md](docs/CQBAL_PT_EN.md). Não há estimativa local da EM a partir do NDT: importa-se a estimativa BR-CORTE 2016 que consta do relatório. Outros métodos de energia permanecem na procedência.
+A correspondência validada das siglas e os resultados dos dois relatórios de referência estão em [docs/CQBAL_PT_EN.md](docs/CQBAL_PT_EN.md). Não há estimativa local da EM a partir do NDT: importa-se a estimativa BR-CORTE 2016 que consta do relatório. Outros métodos selecionados no painel são mantidos em campos próprios, sem substituir a EM BR-CORTE 2016.
 
-**Limites:** um alimento por arquivo, PDF digital de até 10 MB e 20 páginas, com seção de nutrientes calculados. Não há OCR. A procedência deve caber no limite de 45.000 caracteres adotado para uma célula do Google Sheets.
+**Limites:** um alimento por arquivo, até 10 MB; no caso de PDF, até 20 páginas e seção de nutrientes calculados. Não há OCR. A procedência deve caber no limite de 45.000 caracteres adotado para uma célula do Google Sheets.
 
 ### Atualização de uma base existente
 
-Ao reiniciar, o mecanismo de schema acrescenta ao final de `rb_ingredientes` e `rb_dieta_ingredientes` apenas os campos ainda ausentes. Para quem já aplicou a atualização dos dez aminoácidos, são dez novas colunas: `Ala`, `Asn`, `Asp`, `Cys`, `Gly`, `Glu`, `Gln`, `Pro`, `Ser` e `Trp`. Não reordena cabeçalhos nem preenche registros antigos. Faça backup das abas antes da publicação e confira a expansão no primeiro acesso. Dietas antigas mantêm a composição histórica; reimportar um ingrediente é uma ação explícita e não atualiza suas dietas salvas.
+Ao reiniciar, o mecanismo de schema acrescenta as colunas adicionais ao final de `rb_ingredientes` e `rb_dieta_ingredientes`, sem preencher retroativamente os valores. A tabela `rb_cqbal_config` guarda a seleção global, versão e autor da alteração. No backend local, esses dados ficam em `cqbal_config.csv`. Dietas antigas mantêm sua composição histórica. A versão deve ser aplicada como conjunto de arquivos, incluindo o catálogo `src/data/cqbal_catalog.json`. Detalhes e limites em [docs/PAINEL_CQBAL.md](docs/PAINEL_CQBAL.md).
 
 **EM:** 1 Mcal/kg = (1.000 kcal)/(1.000 g) = 1 kcal/g. A importação faz essa conversão automaticamente, com fator 1; por exemplo, 3,21 Mcal/kg resulta em 3,21 kcal/g. Os valores antigos já armazenados em Mcal/kg permanecem numericamente corretos. Na leitura e na exportação de dietas antigas, a unidade Mcal/kg é apresentada como kcal/g sem alterar mínimos, máximos e resultados. Não há regravação retroativa das planilhas ou da procedência original.
 
 **Siglas dos aminoácidos:** o importador usa três letras (`Ala`, `Asn`, `Gln` etc.), também reconhecidas em maiúsculas. Não interpreta automaticamente letras únicas como aminoácidos, pois `P`, `S`, `K` e `I` já representam minerais. Ausentes no CQBAL continuam recebendo zero, com identificação na procedência; campos manuais desconhecidos continuam em branco.
+
+### Painel de Importação CQBAL
+
+Em **Administração > Painel de Importação CQBAL**, somente um administrador ativo pode salvar a seleção. Os 44 campos anteriores vêm habilitados. O catálogo contém 347 campos encontrados em 2.245 relatórios completos, sendo 230 presentes no Milho Fubá de referência. O HTML desse alimento está disponível para conferência no painel; seus valores nunca completam outro alimento.
+
+O catálogo distingue 144 campos compatíveis com a mistura linear (44 anteriores e 100 adicionais) dos demais parâmetros. Os teores adicionais importados tornam-se disponíveis nas restrições dinâmicas e são preservados nas dietas salvas. Frações em bases distintas, taxas, pH e unidades não validadas podem ser importados para conferência, mas precisam de modelo próprio antes de uso como restrição. Desmarcar um item altera somente as próximas importações e não apaga teores ou restrições de dietas anteriores.
+
+Cada mudança é versionada e auditada. Se a seleção mudar durante a conferência, a prévia deve ser refeita. A configuração não depende de um arquivo local temporário no servidor Streamlit.
 
 ## Qualidade dos cadastros
 
@@ -125,6 +134,7 @@ O backend de produção inicial é Google Sheets. O modo local usa arquivos CSV 
 
 | Aba padrão | Conteúdo |
 |---|---|
+| `rb_cqbal_config` | Seleção global de importação CQBAL, versão e última alteração |
 | `rb_ingredientes` | Catálogo, composição, situação, qualidade e procedência |
 | `rb_usuarios` | Usuários, perfis, situação e autenticação local |
 | `rb_dietas` | Metadados e custo das dietas |

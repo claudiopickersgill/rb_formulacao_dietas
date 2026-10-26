@@ -1,3 +1,4 @@
+from src.cqbal_catalog import DEFAULT_CODES
 """Casos reais CQBAL PT/EN e integração dos novos nutrientes."""
 from io import BytesIO
 import json
@@ -183,7 +184,7 @@ if value is not None:
     saved = app.session_state['saved_payload']
     assert saved['EM'] == 3.77 and saved['Lys'] == 1.17
     assert set(AMINO_ACID_CODES) <= set(saved)
-    assert NUTRIENT_BY_CODE['EM'].unit == 'kcal/g' and len(NUTRIENT_CODES) == 44
+    assert NUTRIENT_BY_CODE['EM'].unit == 'kcal/g' and len(DEFAULT_CODES) == 44 and set(DEFAULT_CODES) <= set(NUTRIENT_CODES)
 
 
 @pytest.mark.parametrize('language', ['pt', 'en'])
@@ -203,7 +204,7 @@ from src.cqbal_import import parse_report_text
 from src.models import User
 from src.repositories.local import LocalRepository
 page.st.file_uploader = lambda *a, **k: SimpleNamespace(getvalue=lambda: b'reference', name='reference.pdf')
-page.parse_pdf = lambda content: parse_report_text(Path({fixture!r}).read_text(encoding='utf-8'))
+page.parse_uploaded_report = lambda content, filename: parse_report_text(Path({fixture!r}).read_text(encoding='utf-8'))
 repo = LocalRepository({str(tmp_path)!r})
 repo.initialize()
 page.render(repo, User('u', 'tester', 'Teste', 'Formulador', True))
@@ -212,7 +213,7 @@ page.render(repo, User('u', 'tester', 'Teste', 'Formulador', True))
     from unittest.mock import patch
     import streamlit as st
     import src.pages.cqbal as page
-    with patch.object(st, 'file_uploader', st.file_uploader), patch.object(page, 'parse_pdf', page.parse_pdf):
+    with patch.object(st, 'file_uploader', st.file_uploader), patch.object(page, 'parse_uploaded_report', page.parse_uploaded_report):
         app = AppTest.from_string(source).run()
         assert not app.exception
         app.selectbox[0].select('%').run()

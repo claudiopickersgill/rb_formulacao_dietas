@@ -5,7 +5,7 @@ import json
 import pandas as pd
 import streamlit as st
 
-from ..cqbal_import import parse_pdf, convert_report, provenance_json
+from ..cqbal_import import parse_uploaded_report, convert_configured_report, configured_provenance
 from ..models import User
 from ..repositories.base import Repository
 from ..utils import as_bool, new_id, normalize_text, local_now_iso
@@ -14,18 +14,27 @@ from ..utils import as_bool, new_id, normalize_text, local_now_iso
 def render(repository: Repository, user: User) -> None:
     if not user.can_edit:
         return
-    st.write('Importe um alimento por vez usando o Relatório Completo digital do CQBAL, em português ou inglês.')
-    st.caption('Composição e 20 aminoácidos em %; EM em kcal/g (origem Mcal/kg, fator 1). Microminerais: mg/kg ÷ 10.000. NDT observado e fibras sem variantes.')
-    uploaded = st.file_uploader('Relatório Completo CQBAL (PDF, até 10 MB)', type=['pdf'], key='cqbal_pdf')
+    st.write('Importe um alimento por vez usando o JSON completo, HTML de conferência ou PDF digital do CQBAL, em português ou inglês.')
+    st.caption('Atributos definidos em Administração → Painel de Importação CQBAL. JSON é o formato preferencial; campos selecionados e ausentes recebem zero.')
+    uploaded = st.file_uploader('Relatório Completo CQBAL (JSON, HTML ou PDF, até 10 MB)', type=['json', 'html', 'htm', 'pdf'], key='cqbal_pdf')
     if uploaded is None:
         return
     content = uploaded.getvalue()
     digest = hashlib.sha256(content).hexdigest()
-    prefix = 'cqbal_' + digest[:16]
+    try:
+        policy = repository.get_cqbal_import_policy()
+    except Exception as exc:
+        st.error('Não foi possível ler a configuração CQBAL: ' + str(exc))
+        return
+    if not policy['selected']:
+        st.info('Nenhum atributo está habilitado. Solicite a configuração ao administrador.')
+        return
+    prefix = 'cqbal_' + digest[:16] + '_v' + str(policy['version'])
+    st.caption(f"Configuração global: versão {policy['version']} · {len(policy['selected'])} atributos selecionados.")
     try:
         # Reutiliza somente a extração deste arquivo, sem repetir a leitura a cada widget.
         if st.session_state.get('cqbal_report_hash') != digest:
-            st.session_state['cqbal_report'] = parse_pdf(content)
+            st.session_state['cqbal_report'] = parse_uploaded_report(content, uploaded.name)
             st.session_state['cqbal_report_hash'] = digest
         report = st.session_state['cqbal_report']
     except Exception as exc:
@@ -43,13 +52,13 @@ def render(repository: Repository, user: User) -> None:
             'somente EM_BRCORTE2016 / ME_BRCORTE2016. Use a mesma base de expressão dos demais nutrientes. '
             'Se a fonte usar outras unidades, converta antes do cadastro manual.')
     try:
-        values, preview, missing = convert_report(report, macro_unit)
-        provenance = provenance_json(report, macro_unit, uploaded.name)
+        values, preview, missing, attributes = convert_configured_report(report, macro_unit, policy)
+        provenance = configured_provenance(report, macro_unit, uploaded.name, policy)
     except ValueError as exc:
         st.error(str(exc))
         return
     st.subheader('Conferir importação')
-    st.dataframe(pd.DataFrame(preview).drop(columns=['valor_em_porcentagem']), hide_index=True, width='stretch', column_config={
+    st.dataframe(pd.DataFrame(preview), hide_index=True, width='stretch', column_config={
         'valor_na_base': st.column_config.NumberColumn('Valor na base', format='%.8f'),
         'unidade_destino': 'Unidade na base',
         'media_original': st.column_config.NumberColumn('Média no relatório', format='%.6f'),
@@ -77,14 +86,24 @@ def render(repository: Repository, user: User) -> None:
         labels = {str(r['ingredient_id']): f"{r['nome']} · {r['ingredient_id']}" for _, r in ingredients.iterrows()}
         selected = st.selectbox('Cadastro que será atualizado', ids, format_func=lambda x: labels[x], key=prefix+'_target')
         existing = ingredients.loc[ingredients['ingredient_id'].astype(str).eq(selected)].iloc[0].to_dict()
-        st.warning('A composição desse cadastro será substituída. Campos não encontrados no relatório receberão zero.')
+        st.warning('Somente os atributos selecionados serão atualizados; ausentes recebem zero. Atributos desmarcados mantêm seus valores anteriores.')
         overwrite = st.checkbox('Confirmo substituir a composição do cadastro selecionado.', key=prefix+'_overwrite')
     else:
         overwrite = True
     if st.session_state.get(prefix+'_saved'):
-        st.success('Este PDF já foi importado nesta sessão. Consulte o cadastro antes de repetir a importação.')
+        st.success('Este relatório já foi importado nesta sessão com esta configuração. Consulte o cadastro antes de repetir a importação.')
         return
     if st.button('Salvar ingrediente importado', type='primary', disabled=not(confirmed and overwrite and name), key=prefix+'_save'):
+        try:
+            fresh_policy = repository.get_cqbal_import_policy()
+            if fresh_policy != policy:
+                st.error('O administrador alterou a configuração. Recarregue e confira a nova prévia antes de salvar.')
+                return
+            provenance = configured_provenance(report, macro_unit, uploaded.name, policy,
+                                               (existing or {}).get('cqbal_dados'))
+        except Exception as exc:
+            st.error('Não foi possível preparar a importação: ' + str(exc))
+            return
         payload = dict(existing or {})
         payload.update(values)
         payload.update(ingredient_id=(existing or {}).get('ingredient_id') or new_id('ing'),
@@ -92,9 +111,9 @@ def render(repository: Repository, user: User) -> None:
                        ativo=as_bool((existing or {}).get('ativo'), True), cqbal_dados=provenance,
                        qualidade_dados=('CQBAL: composição parcial; preenchidos com zero por ausência de informação: ' + ', '.join(missing)) if missing else '')
         payload['observacoes'] = '\n'.join(filter(None, [str((existing or {}).get('observacoes') or ''),
-            f'CQBAL importado em {local_now_iso()}; arquivo {uploaded.name}; idioma {report.language}; NDT OBS/OBS TDN; '
-            f'EM/ME_BRCORTE2016 em Mcal/kg; aminoácidos em % do alimento; macro origem {macro_unit}; '
-            f'micro origem mg/kg; destino % exceto EM em kcal/g (fator 1). SHA256 {digest}.']))
+            f'CQBAL importado em {local_now_iso()}; configuração v{policy["version"]}; arquivo {uploaded.name}; idioma {report.language}; '
+            f'{len(policy["selected"])} atributos selecionados; macro origem {macro_unit}; '
+            f'unidades e tratamentos por atributo na prévia e no catálogo CQBAL; SHA256 {digest}.']))
         if len(payload['observacoes']) > 45000:
             st.error('Histórico excede o limite de uma célula do Google.')
             return

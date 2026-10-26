@@ -13,6 +13,7 @@ from ..repositories.base import Repository
 from ..ui_helpers import page_header
 from .cqbal import render as render_cqbal
 from ..utils import as_bool, as_float, new_id, normalize_text
+from ..cqbal_catalog import DEFAULT_CODES, FIELDS
 
 
 def render(repository: Repository, user: User) -> None:
@@ -69,6 +70,14 @@ def render(repository: Repository, user: User) -> None:
                     try:
                         source = json.loads(raw_source)
                         st.write("Arquivo: " + str(source.get("arquivo", "")))
+                        attrs = dict(source.get('atributos_preservados', {}))
+                        attrs.update(source.get('atributos_importados', {}))
+                        if attrs:
+                            st.write('**Atributos CQBAL importados e preservados**')
+                            st.dataframe(pd.DataFrame([dict(codigo=code, descricao=FIELDS.get(code, {}).get('label', code),
+                                                           unidade=FIELDS.get(code, {}).get('unit', ''), **value)
+                                                       for code, value in attrs.items()]),
+                                         hide_index=True, width='stretch')
                         st.dataframe(pd.DataFrame(source.get("registros", [])), hide_index=True, width="stretch")
                         st.download_button("Baixar procedência CQBAL", raw_source.encode("utf-8"),
                                            file_name="cqbal_procedencia.json", mime="application/json", key="cqbal_source_"+selected_id)
@@ -191,6 +200,8 @@ def _ingredient_form(existing: dict[str, Any] | None, prefix: str) -> dict[str, 
         values: dict[str, Any] = {}
         groups: dict[str, list] = {}
         for nutrient in NUTRIENTS:
+            if nutrient.code not in DEFAULT_CODES and as_float(existing.get(nutrient.code)) is None:
+                continue
             groups.setdefault(nutrient.group, []).append(nutrient)
         for group, nutrients in groups.items():
             with st.expander(group, expanded=group == "Macronutrientes"):
@@ -226,6 +237,9 @@ def _ingredient_form(existing: dict[str, Any] | None, prefix: str) -> dict[str, 
         "created_by": existing.get("created_by", ""),
         "created_at": existing.get("created_at", ""),
     }
+    for nutrient in NUTRIENTS:
+        if nutrient.code not in values:
+            payload[nutrient.code] = as_float(existing.get(nutrient.code))
     invalid = []
     for code, raw in values.items():
         parsed = as_float(raw)

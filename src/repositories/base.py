@@ -7,6 +7,12 @@ import pandas as pd
 
 
 class Repository(ABC):
+    def get_cqbal_import_policy(self) -> dict:
+        raise NotImplementedError('Backend sem configuração CQBAL persistente.')
+
+    def save_cqbal_import_policy(self, selected, user, expected_version: int) -> dict:
+        raise NotImplementedError('Backend sem configuração CQBAL persistente.')
+
     @abstractmethod
     def initialize(self) -> None: ...
 

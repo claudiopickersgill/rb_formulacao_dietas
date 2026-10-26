@@ -58,6 +58,16 @@ NUTRIENTS: tuple[Nutrient, ...] = (
     Nutrient("Trp", "Triptofano", "%", "Aminoácidos"),
 )
 
+from .cqbal_catalog import FIELDS as CQBAL_FIELDS
+
+# O catálogo completo fornece colunas persistentes; só valores importados ou
+# preenchidos tornam o atributo disponível na formulação. Campos não aditivos
+# permanecem no documento de procedência, fora do solver linear.
+NUTRIENTS += tuple(
+    Nutrient(field['code'], field['label'], field['unit'], field['group'])
+    for field in CQBAL_FIELDS.values() if not field['default'] and field['formula']
+)
+
 NUTRIENT_CODES = [n.code for n in NUTRIENTS]
 NUTRIENT_BY_CODE = {n.code: n for n in NUTRIENTS}
 AMINO_ACID_CODES = [n.code for n in NUTRIENTS if n.group == "Aminoácidos"]
@@ -155,6 +165,7 @@ AUDIT_COLUMNS = [
 ]
 
 TABLE_SCHEMAS = {
+    "cqbal_config": ["config_id", "version", "selected_json", "updated_by", "updated_at"],
     "ingredientes": INGREDIENT_COLUMNS,
     "usuarios": USER_COLUMNS,
     "dietas": DIET_COLUMNS,

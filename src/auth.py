@@ -23,7 +23,8 @@ def authenticate(
 
 def _authenticate_oidc(repository: Repository, settings: Mapping[str, Any]) -> User:
     if not st.user.is_logged_in:
-        st.title("Formulação RB")
+        st.title("RFB - RUMINANT DIET FORMULATION SYSTEM")
+        st.write("PLATAFORMA WEB PARA FORMULAÇÃO E OTIMIZAÇÃO DE DIETAS PARA RUMINANTES")
         st.write("Entre com sua conta para acessar o sistema.")
         provider = str(settings.get("oidc_provider", "google") or "google")
         if st.button("Entrar com Google", type="primary", width="stretch"):
@@ -74,7 +75,8 @@ def _authenticate_local(repository: Repository, settings: Mapping[str, Any]) -> 
     default_password = str(settings.get("local_password", "admin"))
 
     if not st.session_state.get("local_authenticated", False):
-        st.title("Formulação RB")
+        st.title("RFB - RUMINANT DIET FORMULATION SYSTEM")
+        st.write("PLATAFORMA WEB PARA FORMULAÇÃO E OTIMIZAÇÃO DE DIETAS PARA RUMINANTES")
         st.write("Entre com seu email e senha para acessar o sistema.")
         with st.form("local_login"):
             email = st.text_input("Email", value=default_email)

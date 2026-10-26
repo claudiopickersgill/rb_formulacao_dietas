@@ -2,7 +2,7 @@
 
 Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P22 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P23 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
@@ -304,6 +304,20 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Aplicação:** substituir o arquivo de tela no caminho exato, incluir o teste e atualizar este histórico; reiniciar/republicar. Não aplicar versões antigas de `src/pages/formulation.py` sobre esta correção. Testar com uma formulação nova após a atualização, pois edições já perdidas pela versão anterior não são recuperadas.
 
+## P23 — Identificação do login e símbolo do cálcio no PDF — 26/10/2026
+
+**Base:** branch `main` do GitHub, commit `50bbbc4f527d0ea84dc953606bec3f1c76e5eda0`, já com a atualização de persistência P22.
+
+**Correções:** a entrada por email/senha e a entrada Google passam a mostrar o título `RFB - RUMINANT DIET FORMULATION SYSTEM`, seguido de `PLATAFORMA WEB PARA FORMULAÇÃO E OTIMIZAÇÃO DE DIETAS PARA RUMINANTES`. O nome e a descrição são apresentados em dois blocos para facilitar a leitura. Na tabela de restrições do PDF, o código `CA` é exibido como `Ca`.
+
+**Escopo:** apresentação. A autenticação mantém seu funcionamento; `CA` continua como código interno e nas tabelas Google. Não há mudança em cálculos, unidades, CSV/Excel, dietas salvas ou importação CQBAL. A correção P22 permanece intacta.
+
+**Arquivos:** `src/auth.py`, `src/exports.py` e `PATCHES.md`. `README.md` permanece inalterado porque não há nova funcionalidade.
+
+**Validação:** 15 testes existentes aprovados (exportações, segurança e persistência de ingredientes). Verificação adicional com Streamlit AppTest dos dois modos de login, sem autenticação real. PDF gerado, conteúdo extraído e página renderizada inspecionada: Ca correto, outros símbolos e valores preservados e sem alteração dos dados de entrada. Nenhuma gravação Google ou implantação foi realizada. A suíte completa não foi repetida nesta etapa; as duas falhas preexistentes CQBAL documentadas em P22 não foram tratadas.
+
+**Pacote:** `patch_visual_login_pdf_20261026.zip`. Aplicar depois de P22, copiar os arquivos nos mesmos caminhos e publicar/reiniciar. Nenhuma migração da planilha ou dependência nova é necessária.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -326,6 +340,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_previa_inviabilidade.zip` | P20 |
 | `patch_nomes_restricoes.zip` | P21 |
 | `patch_persistencia_formulacao_20261026.zip` | P22 |
+| `patch_visual_login_pdf_20261026.zip` | P23 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

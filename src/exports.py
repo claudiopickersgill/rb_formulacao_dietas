@@ -173,7 +173,7 @@ def make_pdf_bytes(metadata: dict, items: pd.DataFrame, constraints: pd.DataFram
     for _, row in constraints.iterrows():
         nutrient_rows.append(
             [
-                str(row.get("nutriente", "")),
+                "Ca" if str(row.get("nutriente", "")) == "CA" else str(row.get("nutriente", "")),
                 str(row.get("unidade", "")),
                 _number_or_dash(row.get("minimo")),
                 _number_or_dash(row.get("maximo")),

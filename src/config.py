@@ -21,6 +21,7 @@ NUTRIENTS: tuple[Nutrient, ...] = (
     Nutrient("MM", "Matéria mineral", "%", "Macronutrientes"),
     Nutrient("FB", "Fibra bruta", "%", "Macronutrientes"),
     Nutrient("AMIDO", "Amido", "%", "Macronutrientes"),
+    Nutrient("EM", "Energia metabolizável", "Mcal/kg", "Macronutrientes"),
     Nutrient("CA", "Cálcio", "%", "Macrominerais"),
     Nutrient("P", "Fósforo", "%", "Macrominerais"),
     Nutrient("Mg", "Magnésio", "%", "Macrominerais"),
@@ -35,10 +36,21 @@ NUTRIENTS: tuple[Nutrient, ...] = (
     Nutrient("Co", "Cobalto", "%", "Microminerais"),
     Nutrient("I", "Iodo", "%", "Microminerais"),
     Nutrient("Se", "Selênio", "%", "Microminerais"),
+    Nutrient("Lys", "Lisina", "%", "Aminoácidos"),
+    Nutrient("Met", "Metionina", "%", "Aminoácidos"),
+    Nutrient("Thr", "Treonina", "%", "Aminoácidos"),
+    Nutrient("Phe", "Fenilalanina", "%", "Aminoácidos"),
+    Nutrient("Leu", "Leucina", "%", "Aminoácidos"),
+    Nutrient("Ile", "Isoleucina", "%", "Aminoácidos"),
+    Nutrient("Val", "Valina", "%", "Aminoácidos"),
+    Nutrient("His", "Histidina", "%", "Aminoácidos"),
+    Nutrient("Arg", "Arginina", "%", "Aminoácidos"),
+    Nutrient("Tyr", "Tirosina", "%", "Aminoácidos"),
 )
 
 NUTRIENT_CODES = [n.code for n in NUTRIENTS]
 NUTRIENT_BY_CODE = {n.code: n for n in NUTRIENTS}
+AMINO_ACID_CODES = [n.code for n in NUTRIENTS if n.group == "Aminoácidos"]
 DEFAULT_CONSTRAINTS = [
     "MS",
     "NDT",

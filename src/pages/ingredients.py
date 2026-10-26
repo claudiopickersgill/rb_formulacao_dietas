@@ -135,6 +135,7 @@ def _list_ingredients(ingredients: pd.DataFrame) -> None:
         "preco_padrao",
         "MS",
         "NDT",
+        "EM",
         "PB",
         "EE",
         "MM",
@@ -186,6 +187,7 @@ def _ingredient_form(existing: dict[str, Any] | None, prefix: str) -> dict[str, 
 
         st.markdown("**Composição nutricional**")
         st.caption("Deixe vazio quando o valor for desconhecido. Não use zero para representar dado ausente.")
+        st.caption("EM em Mcal/kg. Aminoácidos em % do alimento, não da PB. Use a mesma base (seca ou natural) em todos os teores.")
         values: dict[str, Any] = {}
         groups: dict[str, list] = {}
         for nutrient in NUTRIENTS:
@@ -195,7 +197,7 @@ def _ingredient_form(existing: dict[str, Any] | None, prefix: str) -> dict[str, 
                 cols = st.columns(4)
                 for idx, nutrient in enumerate(nutrients):
                     values[nutrient.code] = cols[idx % 4].text_input(
-                        f"{nutrient.code} ({nutrient.unit})",
+                        f"{nutrient.label} - {'Ca' if nutrient.code == 'CA' else nutrient.code} ({nutrient.unit})",
                         value=_text_number(existing.get(nutrient.code)),
                         key=f"{prefix}_{nutrient.code}",
                     )

@@ -14,8 +14,8 @@ from ..utils import as_bool, new_id, normalize_text, local_now_iso
 def render(repository: Repository, user: User) -> None:
     if not user.can_edit:
         return
-    st.write('Importe um alimento por vez usando o PDF digital do Relatório Completo do CQBAL.')
-    st.caption('Base armazenada em %. Microminerais: mg/kg ÷ 10.000. Somente NDT OBS, FDA e FDN sem variantes.')
+    st.write('Importe um alimento por vez usando o Relatório Completo digital do CQBAL, em português ou inglês.')
+    st.caption('Composição e aminoácidos em %; EM em Mcal/kg. Microminerais: mg/kg ÷ 10.000. NDT observado e fibras sem variantes.')
     uploaded = st.file_uploader('Relatório Completo CQBAL (PDF, até 10 MB)', type=['pdf'], key='cqbal_pdf')
     if uploaded is None:
         return
@@ -32,11 +32,16 @@ def render(repository: Repository, user: User) -> None:
         st.error(str(exc))
         return
     st.write(f'Alimento no relatório: **{report.name}**. Categoria: **{report.category}**.')
+    st.caption('Idioma identificado: ' + {'pt': 'Português', 'en': 'Inglês'}.get(report.language, report.language)
+               + '. A tradução das siglas não altera os valores nem define as unidades.')
     macro_unit = st.selectbox('Unidade de origem dos macrominerais neste relatório',
                               ['Confirmar unidade', '%', 'g/kg'], key=prefix+'_unit')
     if macro_unit == 'Confirmar unidade':
         st.info('Confirme a unidade dos macrominerais para gerar a prévia de conversão.')
         return
+    st.info('Aminoácidos: % do alimento, não % da proteína bruta. Energia metabolizável: Mcal/kg, '
+            'somente EM_BRCORTE2016 / ME_BRCORTE2016. Use a mesma base de expressão dos demais nutrientes. '
+            'Se a fonte usar outras unidades, converta antes do cadastro manual.')
     try:
         values, preview, missing = convert_report(report, macro_unit)
         provenance = provenance_json(report, macro_unit, uploaded.name)
@@ -44,8 +49,9 @@ def render(repository: Repository, user: User) -> None:
         st.error(str(exc))
         return
     st.subheader('Conferir importação')
-    st.dataframe(pd.DataFrame(preview), hide_index=True, width='stretch', column_config={
-        'valor_em_porcentagem': st.column_config.NumberColumn('Valor na base (%)', format='%.8f'),
+    st.dataframe(pd.DataFrame(preview).drop(columns=['valor_em_porcentagem']), hide_index=True, width='stretch', column_config={
+        'valor_na_base': st.column_config.NumberColumn('Valor na base', format='%.8f'),
+        'unidade_destino': 'Unidade na base',
         'media_original': st.column_config.NumberColumn('Média no relatório', format='%.6f'),
     })
     st.download_button('Baixar todos os dados e procedência (JSON)', provenance.encode('utf-8'),
@@ -57,7 +63,7 @@ def render(repository: Repository, user: User) -> None:
     kind = st.selectbox('Tipo do ingrediente', ['Alimento', 'Mineral'],
                         index=1 if default_type == 'Mineral' else 0, key=prefix+'_type')
     classification = st.text_input('Classificação', report.category, key=prefix+'_class')
-    confirmed = st.checkbox('Conferi os valores, a unidade dos macrominerais e a base de expressão do relatório.',
+    confirmed = st.checkbox('Conferi os valores, minerais, aminoácidos em % do alimento, EM em Mcal/kg e a base de expressão.',
                              key=prefix+'_confirmed')
     mode = st.radio('Gravação', ['Cadastrar novo', 'Atualizar cadastro existente'], key=prefix+'_mode')
     # A escolha de atualização é por ID; não há correspondência automática por texto aproximado.
@@ -86,7 +92,9 @@ def render(repository: Repository, user: User) -> None:
                        ativo=as_bool((existing or {}).get('ativo'), True), cqbal_dados=provenance,
                        qualidade_dados=('CQBAL: composição parcial; preenchidos com zero por ausência de informação: ' + ', '.join(missing)) if missing else '')
         payload['observacoes'] = '\n'.join(filter(None, [str((existing or {}).get('observacoes') or ''),
-            f'CQBAL importado em {local_now_iso()}; arquivo {uploaded.name}; NDT OBS; macro origem {macro_unit}; micro origem mg/kg; destino %. SHA256 {digest}.']))
+            f'CQBAL importado em {local_now_iso()}; arquivo {uploaded.name}; idioma {report.language}; NDT OBS/OBS TDN; '
+            f'EM/ME_BRCORTE2016 em Mcal/kg; aminoácidos em % do alimento; macro origem {macro_unit}; '
+            f'micro origem mg/kg; destino % exceto EM em Mcal/kg. SHA256 {digest}.']))
         if len(payload['observacoes']) > 45000:
             st.error('Histórico excede o limite de uma célula do Google.')
             return

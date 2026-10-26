@@ -2,14 +2,14 @@
 
 Aplicativo web em Streamlit para formular dietas de ruminantes por custo mínimo, com cadastro de ingredientes, restrições nutricionais, importação de relatórios CQBAL, armazenamento no Google Sheets e exportação de resultados.
 
-Documentação consolidada em **17/10/2026**, com base no código local e no histórico de atualizações. O histórico das correções e das regras substituídas está em [patches.md](patches.md).
+Documentação consolidada em **17/10/2026**, atualizada em **26/10/2026**, com base no código local e no histórico de atualizações. O histórico das correções e das regras substituídas está em [PATCHES.md](PATCHES.md).
 
 Repositório: [claudiopickersgill/rb_formulacao_dietas](https://github.com/claudiopickersgill/rb_formulacao_dietas).
 
 ## Funcionalidades
 
 - **Visão geral:** ingredientes ativos, pendências de qualidade, dietas acessíveis e custos.
-- **Ingredientes:** consulta, cadastro, edição, inativação, reativação e importação por CSV ou PDF do CQBAL.
+- **Ingredientes:** consulta, cadastro, edição, inativação, reativação e importação por CSV ou PDF do CQBAL em português ou inglês, com aminoácidos e Energia Metabolizável (EM).
 - **Nova formulação:** seleção de ingredientes, preços, limites de inclusão e restrições nutricionais dinâmicas.
 - **Resultado:** composição da mistura, custo, teores nutricionais e comparação com os limites solicitados.
 - **Diagnóstico de inviabilidade:** mensagens de conflito e simulação de uma mistura com restrições nutricionais flexibilizadas.
@@ -51,23 +51,27 @@ Essa simulação mantém os limites de inclusão e a soma de 100%, mas flexibili
 
 ## Nutrientes e unidades
 
-O registro atual possui **23 nutrientes**, todos armazenados em **porcentagem**:
+O registro atual possui **34 nutrientes**: os 23 anteriores, Energia Metabolizável (EM) e dez aminoácidos. Todos são armazenados em **porcentagem**, exceto **EM em Mcal/kg**:
 
 | Grupo | Nutrientes |
 |---|---|
-| Composição principal | MS, NDT, PB, FDN, FDA, EE, MM, FB e AMIDO |
+| Composição principal | MS, NDT, PB, FDN, FDA, EE, MM, FB e AMIDO (%) |
+| Energia | EM (Mcal/kg) |
 | Macrominerais | Ca (`CA`), P, Mg, Na, K, Cl e S |
 | Microminerais | Fe, Cu, Mn, Zn, Co, I e Se |
+| Aminoácidos | Lisina (Lys), Metionina (Met), Treonina (Thr), Fenilalanina (Phe), Leucina (Leu), Isoleucina (Ile), Valina (Val), Histidina (His), Arginina (Arg) e Tirosina (Tyr) |
 
-Os limites nutricionais devem usar as mesmas unidades da composição. O sistema não converte automaticamente uma dieta entre matéria natural e matéria seca: a base de expressão dos dados deve ser coerente.
+EM e aminoácidos estão disponíveis no cadastro manual, na edição, no CSV, nas restrições dinâmicas, nas dietas salvas e nas exportações. Os aminoácidos representam % do alimento, não % da PB, nem oferta de aminoácidos metabolizáveis ao animal. O cadastro manual mantém campos desconhecidos em branco; a regra de zero abaixo é específica da importação CQBAL.
+
+Os limites nutricionais devem usar as mesmas unidades da composição: uma EM mínima de 3,0 significa 3,0 Mcal/kg, não 3,0%. O sistema não converte automaticamente uma dieta entre matéria natural e matéria seca: a base de expressão dos dados deve ser coerente.
 
 ## Importação CQBAL
 
 Em **Ingredientes > Importar CQBAL**:
 
-1. Envie o PDF digital do **Relatório Completo** de um único alimento.
+1. Envie o PDF digital do **Relatório Completo** de um único alimento, em português ou inglês. O idioma e as siglas são reconhecidos automaticamente; o nome do alimento é preservado no idioma original e pode ser editado.
 2. Confirme se os macrominerais da fonte estão em `%` ou `g/kg`.
-3. Confira a prévia, incluindo os valores convertidos e os campos preenchidos com zero.
+3. Confira a prévia, incluindo as unidades de cada campo e os zeros por ausência. Confirme aminoácidos em % do alimento e EM em Mcal/kg; o idioma não determina a unidade ou a base seca/natural.
 4. Revise nome, tipo e classificação; escolha cadastrar ou atualizar explicitamente um registro por ID.
 5. Confirme os valores e a base de expressão e salve.
 
@@ -76,7 +80,9 @@ Em **Ingredientes > Importar CQBAL**:
 | Informação da fonte | Tratamento |
 |---|---|
 | MS, PB, EE, MM, FB e AMIDO | Importar em % |
-| NDT | Usar exclusivamente `NDT OBS` |
+| NDT | Usar exclusivamente `NDT OBS` / `OBS TDN` |
+| EM | Importar apenas `EM_BRCORTE2016` / `ME_BRCORTE2016`, em Mcal/kg, da seção calculada |
+| Dez aminoácidos | Importar as siglas exatas em % do alimento, sem converter em % da PB |
 | FDA e FDN | Usar somente os códigos exatos; não substituir por variantes |
 | Macrominerais em g/kg | Dividir por 10 para armazenar em % |
 | Macrominerais em % | Manter o valor |
@@ -90,9 +96,15 @@ Os valores antigos da base não são reconvertidos: foram considerados já expre
 
 A atualização de um ingrediente substitui sua composição: nutrientes ausentes no PDF recebem zero. Preço e demais informações existentes são preservados conforme o fluxo de atualização.
 
-O campo `cqbal_dados` guarda nome original, arquivo, hash SHA256, categoria, unidades de origem, método do NDT, registros reconhecidos e campos preenchidos com zero. A procedência pode ser consultada e baixada na edição do ingrediente.
+O campo `cqbal_dados` guarda nome original, idioma, arquivo, hash SHA256, categoria original e normalizada, unidades de origem e por campo de destino, métodos de NDT e EM, registros reconhecidos e campos preenchidos com zero. A procedência nova usa versão 2; os JSON antigos continuam legíveis. A procedência pode ser consultada e baixada na edição do ingrediente.
+
+A correspondência validada das siglas e os resultados dos dois relatórios de referência estão em [docs/CQBAL_PT_EN.md](docs/CQBAL_PT_EN.md). Não há estimativa local da EM a partir do NDT: importa-se a estimativa BR-CORTE 2016 que consta do relatório. Outros métodos de energia permanecem na procedência.
 
 **Limites:** um alimento por arquivo, PDF digital de até 10 MB e 20 páginas, com seção de nutrientes calculados. Não há OCR. A procedência deve caber no limite de 45.000 caracteres adotado para uma célula do Google Sheets.
+
+### Atualização de uma base existente
+
+Ao reiniciar após esta atualização, o mecanismo de schema acrescenta `EM`, `Lys`, `Met`, `Thr`, `Phe`, `Leu`, `Ile`, `Val`, `His`, `Arg` e `Tyr` ao final de `rb_ingredientes` e `rb_dieta_ingredientes`. Não reordena cabeçalhos nem preenche os registros antigos. Não renomeie nem reposicione as colunas manualmente. Faça backup das abas antes da publicação e confira a expansão no primeiro acesso. Dietas antigas mantêm a composição histórica; reimportar um ingrediente é uma ação explícita e não atualiza suas dietas salvas.
 
 ## Qualidade dos cadastros
 
@@ -181,7 +193,7 @@ src/auth.py                    Autenticação
 src/security.py                Senhas e hashes
 tests/                         Testes automatizados
 readme.md                      Informações gerais
-patches.md                     Histórico consolidado de evoluções
+PATCHES.md                     Histórico consolidado de evoluções
 ```
 
 Existem arquivos de compatibilidade fora de `src/pages`. Ao aplicar uma correção de tela, confira o caminho exato: por exemplo, `src/pages/formulation.py` é o arquivo usado pelo fluxo atual de formulação.
@@ -202,6 +214,6 @@ python -m unittest discover -s tests -p "test_cqbal*.py" -v
 python -m unittest discover -s tests -p test_infeasible_preview.py -v
 ```
 
-Antes de atualizar, faça backup do código e das tabelas afetadas. Evite gravar na base durante a aplicação. Patches antigos que substituem arquivos inteiros podem desfazer melhorias posteriores: consulte a sequência e as regras vigentes em [patches.md](patches.md).
+Antes de atualizar, faça backup do código e das tabelas afetadas. Evite gravar na base durante a aplicação. Patches antigos que substituem arquivos inteiros podem desfazer melhorias posteriores: consulte a sequência e as regras vigentes em [PATCHES.md](PATCHES.md).
 
 Os resultados e as limitações de validação de cada entrega estão registrados no histórico; este documento não declara uma nova execução da suíte completa.

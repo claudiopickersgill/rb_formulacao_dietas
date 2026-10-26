@@ -2,17 +2,18 @@
 
 Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P23 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P24 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
 | Assunto | Histórico | Regra vigente |
 |---|---|---|
 | Composição no início do app | Foi criado preenchimento automático usando a tabela legada e um seed | A chamada automática foi desativada; não restaurar a regra antiga ao reaplicar patches |
-| Quantidade de nutrientes | O cadastro original tinha 20 campos | São 23, com EE, MM e FB |
+| Quantidade de nutrientes | O cadastro original tinha 20 campos | São 34: os 23 anteriores, EM e dez aminoácidos |
+| Energia metabolizável | Não havia campo próprio | EM em Mcal/kg; importar apenas EM/ME_BRCORTE2016, sem derivar do NDT |
 | Unidade dos microminerais | A interface antiga mostrava mg/kg | A base usa %; importar mg/kg dividindo por 10.000 |
 | Ausentes no CQBAL | A primeira importação deixava campos em branco | A composição importada recebe 0; a ausência continua identificada na procedência |
-| NDT do CQBAL | O relatório contém valores observados e várias estimativas | Somente NDT OBS preenche NDT |
+| NDT do CQBAL | O relatório contém valores observados e várias estimativas | Somente NDT OBS / OBS TDN preenche NDT |
 | FDA e FDN | Há variantes corrigidas e frações no relatório | Somente FDA e FDN exatos preenchem os campos correspondentes |
 | Cálcio | O código interno é CA | Mostrar Ca na sigla visual; manter CA no cálculo e no Google |
 | Dieta inviável | Somente mensagens e faixas de diagnóstico | Acrescentar simulação diagnóstica; continuar sem aprovar ou salvar como dieta válida |
@@ -318,6 +319,24 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Pacote:** `patch_visual_login_pdf_20261026.zip`. Aplicar depois de P22, copiar os arquivos nos mesmos caminhos e publicar/reiniciar. Nenhuma migração da planilha ou dependência nova é necessária.
 
+## P24 — CQBAL em português/inglês, EM e aminoácidos — 26/10/2026
+
+**Base:** `main`, commit `6da09b26abe8ee6fc5b9d4f82bfdb8c0e545310f` (Correções visuais tela login e pdf exportado), com P22 e P23 aplicados.
+
+**Funcionalidades:** importador bilíngue com identificação automática de idioma, correspondência exata de siglas, dez aminoácidos e Energia Metabolizável em cadastro, edição, formulação, persistência e exportações. As funcionalidades e o uso estão documentados em `README.md` e `docs/CQBAL_PT_EN.md`.
+
+**Regras:** MS/DM, PB/CP, MM/ASH, FB/CF, FDN/NDF, FDA/ADF, AMIDO/STARCH e NDT OBS/OBS TDN. O idioma traduz nomes e siglas, não converte valores. Mantidas as conversões explícitas de macrominerais e microminerais e o zero para ausentes no CQBAL. Apenas EM_BRCORTE2016/ME_BRCORTE2016 da seção calculada preenche EM (Mcal/kg). Aminoácidos Lys, Met, Thr, Phe, Leu, Ile, Val, His, Arg e Tyr em % do alimento. O usuário confirma unidades e base de expressão; não há inferência de unidades pelo idioma ou conversão seca/natural. Valores conflitantes de siglas equivalentes são rejeitados. Os campos estatísticos e demais dados não mapeados continuam na procedência.
+
+**Procedência e interface:** JSON versão 2 registra idioma, categoria original, unidades por campo e método energético. A prévia passa a usar valor e unidade de destino em colunas distintas, evitando chamar EM de porcentagem. O campo legado `valor_em_porcentagem` é preservado na função de conversão para compatibilidade, mas fica vazio para EM. O nome do alimento não é traduzido automaticamente; atualizar um cadastro exige seleção por ID.
+
+**Schema:** o registro central passa de 23 para 34 nutrientes. O mecanismo existente acrescenta as 11 colunas novas ao final de rb_ingredientes e rb_dieta_ingredientes durante a inicialização; não reordena colunas nem preenche linhas antigas. Não houve acesso de escrita ao Google durante a preparação. Solver e exportadores já usam o registro central; não precisaram de substituição. Seus cálculos ponderam todos os teores pela fração de inclusão, inclusive Mcal/kg.
+
+**Testes corrigidos:** os dois testes antigos do CQBAL que ainda exigiam None para ausentes agora verificam zero, conforme a política já vigente; a contagem da prévia passa a permitir linhas sintéticas dos ausentes. Não se alterou a política para satisfazer testes antigos.
+
+**Validação:** os dois PDFs digitais reais fornecidos foram lidos integralmente: 118 registros cada, mesmos 34 campos finais e mesmas nove ausências. Comparação congelada em fixtures textuais. Foram acrescentados 14 testes de equivalência, seleção estrita, conversões, procedência, conflito de aliases, cadastro manual, importação pela tela nos dois idiomas, preservação de preço/histórico, solver com EM e Lys, salvamento/carregamento e expansão de cabeçalhos Google simulados. A suíte completa teve 80 testes aprovados. Exportação PDF também foi renderizada e conferida visualmente. Nenhuma implantação ou gravação no Google real foi executada.
+
+**Pacote:** `patch_cqbal_bilingue_em_aminoacidos_20261026.zip`. Aplicar após P23, com backup das planilhas. A reinicialização em produção acrescentará cabeçalhos; a aplicação do pacote não reimporta o catálogo. PDFs de outros sistemas, digitalizados ou com layouts não reconhecidos não são cobertos.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -341,6 +360,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_nomes_restricoes.zip` | P21 |
 | `patch_persistencia_formulacao_20261026.zip` | P22 |
 | `patch_visual_login_pdf_20261026.zip` | P23 |
+| `patch_cqbal_bilingue_em_aminoacidos_20261026.zip` | P24 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

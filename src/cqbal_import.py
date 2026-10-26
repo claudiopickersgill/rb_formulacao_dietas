@@ -8,7 +8,8 @@ import json
 import math
 import re
 
-from .config import NUTRIENT_BY_CODE, NUTRIENT_CODES
+from .config import AMINO_ACID_CODES, NUTRIENT_BY_CODE, NUTRIENT_CODES
+from .energy import em_to_kcal_per_g
 
 MACROS = {'CA', 'P', 'Mg', 'Na', 'K', 'Cl', 'S'}
 MICROS = {'Fe', 'Cu', 'Mn', 'Zn', 'Co', 'I', 'Se'}
@@ -18,7 +19,10 @@ MAPPING.pop('CA', None)
 MAPPING.pop('EM', None)
 MAPPING.update({'NDT OBS': 'NDT', 'Ca': 'CA',
                 'DM': 'MS', 'CP': 'PB', 'ASH': 'MM', 'CF': 'FB',
-                'NDF': 'FDN', 'ADF': 'FDA', 'STARCH': 'AMIDO', 'OBS TDN': 'NDT'})
+                'NDF': 'FDN', 'ADF': 'FDA', 'STARCH': 'AMIDO', 'OBS TDN': 'NDT',
+                'ZINC': 'Zn', 'Zinc': 'Zn', 'zinc': 'Zn'})
+# Somente siglas de três letras. I, K, P e S continuam sendo minerais.
+MAPPING.update({code.upper(): code for code in AMINO_ACID_CODES})
 # Somente esta estimativa tem correspondência validada nos relatórios de referência.
 ENERGY_MAPPING = {'EM_BRCORTE2016': 'EM', 'ME_BRCORTE2016': 'EM'}
 CATEGORIES = ('FORRAGENS SECAS', 'FORRAGENS VERDES', 'SILAGENS',
@@ -141,6 +145,8 @@ def convert_report(report: CQBALReport, macro_unit: str, *, amino_unit: str = '%
             unit = ('Mcal/kg' if target == 'EM' else 'mg/kg' if target in MICROS
                     else macro_unit if target in MACROS else '%')
             converted = value / 10000 if target in MICROS else value / 10 if target in MACROS and macro_unit == 'g/kg' else value
+            if target == 'EM':
+                converted = em_to_kcal_per_g(value, energy_unit)
             if target != 'EM' and converted > 100:
                 raise ValueError('Valor convertido acima de 100%; confira a unidade de ' + source)
             if composition[target] is not None and not math.isclose(composition[target], converted, rel_tol=0, abs_tol=1e-12):
@@ -179,11 +185,13 @@ def convert_report(report: CQBALReport, macro_unit: str, *, amino_unit: str = '%
 def provenance_json(report: CQBALReport, macro_unit: str, filename: str) -> str:
     _, _, missing = convert_report(report, macro_unit)
     value = json.dumps(dict(fonte='CQBAL', arquivo=filename, sha256=report.sha256,
-                           versao_procedencia=2, idioma=report.language,
+                           versao_procedencia=3, idioma=report.language,
                            nome_original=report.name, categoria=report.category,
                            categoria_original=report.category_original or report.category,
                            unidade_macro_origem=macro_unit, unidade_micro_origem='mg/kg',
                            unidade_amino_origem='%', unidade_em_origem='Mcal/kg',
+                           conversao_em=dict(unidade_origem='Mcal/kg', unidade_destino='kcal/g',
+                                             fator=1000.0 / 1000.0),
                            unidade_destino='por_campo',
                            unidades_destino={code: NUTRIENT_BY_CODE[code].unit for code in NUTRIENT_CODES},
                            metodo_ndt='NDT OBS / OBS TDN', metodo_em='EM_BRCORTE2016 / ME_BRCORTE2016',

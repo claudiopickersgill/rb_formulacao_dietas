@@ -15,7 +15,7 @@ def render(repository: Repository, user: User) -> None:
     if not user.can_edit:
         return
     st.write('Importe um alimento por vez usando o Relatório Completo digital do CQBAL, em português ou inglês.')
-    st.caption('Composição e aminoácidos em %; EM em Mcal/kg. Microminerais: mg/kg ÷ 10.000. NDT observado e fibras sem variantes.')
+    st.caption('Composição e 20 aminoácidos em %; EM em kcal/g (origem Mcal/kg, fator 1). Microminerais: mg/kg ÷ 10.000. NDT observado e fibras sem variantes.')
     uploaded = st.file_uploader('Relatório Completo CQBAL (PDF, até 10 MB)', type=['pdf'], key='cqbal_pdf')
     if uploaded is None:
         return
@@ -39,7 +39,7 @@ def render(repository: Repository, user: User) -> None:
     if macro_unit == 'Confirmar unidade':
         st.info('Confirme a unidade dos macrominerais para gerar a prévia de conversão.')
         return
-    st.info('Aminoácidos: % do alimento, não % da proteína bruta. Energia metabolizável: Mcal/kg, '
+    st.info('Aminoácidos: % do alimento, não % da proteína bruta. Energia metabolizável: origem Mcal/kg e destino kcal/g (1 Mcal/kg = 1 kcal/g), '
             'somente EM_BRCORTE2016 / ME_BRCORTE2016. Use a mesma base de expressão dos demais nutrientes. '
             'Se a fonte usar outras unidades, converta antes do cadastro manual.')
     try:
@@ -63,7 +63,7 @@ def render(repository: Repository, user: User) -> None:
     kind = st.selectbox('Tipo do ingrediente', ['Alimento', 'Mineral'],
                         index=1 if default_type == 'Mineral' else 0, key=prefix+'_type')
     classification = st.text_input('Classificação', report.category, key=prefix+'_class')
-    confirmed = st.checkbox('Conferi os valores, minerais, aminoácidos em % do alimento, EM em Mcal/kg e a base de expressão.',
+    confirmed = st.checkbox('Conferi os valores, minerais, aminoácidos em % do alimento, EM convertida de Mcal/kg para kcal/g e a base de expressão.',
                              key=prefix+'_confirmed')
     mode = st.radio('Gravação', ['Cadastrar novo', 'Atualizar cadastro existente'], key=prefix+'_mode')
     # A escolha de atualização é por ID; não há correspondência automática por texto aproximado.
@@ -94,7 +94,7 @@ def render(repository: Repository, user: User) -> None:
         payload['observacoes'] = '\n'.join(filter(None, [str((existing or {}).get('observacoes') or ''),
             f'CQBAL importado em {local_now_iso()}; arquivo {uploaded.name}; idioma {report.language}; NDT OBS/OBS TDN; '
             f'EM/ME_BRCORTE2016 em Mcal/kg; aminoácidos em % do alimento; macro origem {macro_unit}; '
-            f'micro origem mg/kg; destino % exceto EM em Mcal/kg. SHA256 {digest}.']))
+            f'micro origem mg/kg; destino % exceto EM em kcal/g (fator 1). SHA256 {digest}.']))
         if len(payload['observacoes']) > 45000:
             st.error('Histórico excede o limite de uma célula do Google.')
             return

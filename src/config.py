@@ -21,7 +21,7 @@ NUTRIENTS: tuple[Nutrient, ...] = (
     Nutrient("MM", "Matéria mineral", "%", "Macronutrientes"),
     Nutrient("FB", "Fibra bruta", "%", "Macronutrientes"),
     Nutrient("AMIDO", "Amido", "%", "Macronutrientes"),
-    Nutrient("EM", "Energia metabolizável", "Mcal/kg", "Macronutrientes"),
+    Nutrient("EM", "Energia metabolizável", "kcal/g", "Macronutrientes"),
     Nutrient("CA", "Cálcio", "%", "Macrominerais"),
     Nutrient("P", "Fósforo", "%", "Macrominerais"),
     Nutrient("Mg", "Magnésio", "%", "Macrominerais"),
@@ -46,6 +46,16 @@ NUTRIENTS: tuple[Nutrient, ...] = (
     Nutrient("His", "Histidina", "%", "Aminoácidos"),
     Nutrient("Arg", "Arginina", "%", "Aminoácidos"),
     Nutrient("Tyr", "Tirosina", "%", "Aminoácidos"),
+    Nutrient("Ala", "Alanina", "%", "Aminoácidos"),
+    Nutrient("Asn", "Asparagina", "%", "Aminoácidos"),
+    Nutrient("Asp", "Ácido aspártico / Aspartato", "%", "Aminoácidos"),
+    Nutrient("Cys", "Cisteína", "%", "Aminoácidos"),
+    Nutrient("Gly", "Glicina", "%", "Aminoácidos"),
+    Nutrient("Glu", "Ácido glutâmico / Glutamato", "%", "Aminoácidos"),
+    Nutrient("Gln", "Glutamina", "%", "Aminoácidos"),
+    Nutrient("Pro", "Prolina", "%", "Aminoácidos"),
+    Nutrient("Ser", "Serina", "%", "Aminoácidos"),
+    Nutrient("Trp", "Triptofano", "%", "Aminoácidos"),
 )
 
 NUTRIENT_CODES = [n.code for n in NUTRIENTS]

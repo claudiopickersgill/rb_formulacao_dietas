@@ -2,15 +2,15 @@
 
 Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P24 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P25 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
 | Assunto | Histórico | Regra vigente |
 |---|---|---|
 | Composição no início do app | Foi criado preenchimento automático usando a tabela legada e um seed | A chamada automática foi desativada; não restaurar a regra antiga ao reaplicar patches |
-| Quantidade de nutrientes | O cadastro original tinha 20 campos | São 34: os 23 anteriores, EM e dez aminoácidos |
-| Energia metabolizável | Não havia campo próprio | EM em Mcal/kg; importar apenas EM/ME_BRCORTE2016, sem derivar do NDT |
+| Quantidade de nutrientes | O cadastro original tinha 20 campos | São 44: os 23 anteriores, EM e vinte aminoácidos |
+| Energia metabolizável | Não havia campo próprio | Origem Mcal/kg, destino kcal/g (fator 1); importar apenas EM/ME_BRCORTE2016, sem derivar do NDT |
 | Unidade dos microminerais | A interface antiga mostrava mg/kg | A base usa %; importar mg/kg dividindo por 10.000 |
 | Ausentes no CQBAL | A primeira importação deixava campos em branco | A composição importada recebe 0; a ausência continua identificada na procedência |
 | NDT do CQBAL | O relatório contém valores observados e várias estimativas | Somente NDT OBS / OBS TDN preenche NDT |
@@ -337,6 +337,22 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Pacote:** `patch_cqbal_bilingue_em_aminoacidos_20261026.zip`. Aplicar após P23, com backup das planilhas. A reinicialização em produção acrescentará cabeçalhos; a aplicação do pacote não reimporta o catálogo. PDFs de outros sistemas, digitalizados ou com layouts não reconhecidos não são cobertos.
 
+## P25 — ZINC, EM em kcal/g e vinte aminoácidos — 26/10/2026
+
+**Base:** `main`, commit `d69dd3669dcb0c74287c26fe22b9c6b6fbb80cea` (Importação CQBal em Br e Ing), com P24 aplicado.
+
+**Correções e ampliação:** alias inglês ZINC para Zn, mantendo a conversão de microminerais mg/kg para %. EM importada de Mcal/kg e convertida automaticamente para kcal/g; fator 1, portanto 3,21 permanece 3,21. Cadastro, restrições, resultados e exportações usam kcal/g. Adicionados Ala, Asn, Asp, Cys, Gly, Glu, Gln, Pro, Ser e Trp aos dez aminoácidos existentes: vinte aminoácidos e 44 nutrientes no total.
+
+**Compatibilidade:** não mapear letras únicas como aminoácidos; I, K, P e S continuam sendo minerais. Os campos por três letras e suas formas em maiúsculas são reconhecidos. Mantidos zero para ausentes no CQBAL, seleção estrita de NDT observado/FDA/FDN, método energético BR-CORTE 2016, conversões de minerais e preservação da procedência completa. Valores divergentes de Zn e ZINC no mesmo relatório são rejeitados como conflito.
+
+**Energia legada:** a normalização de leitura de restrições apresenta EM antes identificada por Mcal/kg como kcal/g, convertendo também limites e resultados pelo fator 1. Não há alteração dos números nem da base seca/natural, regravação automática das planilhas ou edição do JSON de procedência antigo. A normalização é idempotente e é utilizada na visualização, reabertura e exportação das dietas. Procedência nova versão 3 registra unidade de origem, destino e fator energético.
+
+**Schema:** o mecanismo existente acrescenta somente as dez colunas novas ao final de rb_ingredientes e rb_dieta_ingredientes, sem reordenar, limpar ou completar retroativamente as linhas. A EM existente não precisa de migração numérica.
+
+**Validação:** os quatro PDFs reais de algodão e trigo, nos dois idiomas, foram processados integralmente. Algodão: 118 registros por PDF. Trigo: 74 registros por PDF, 18 aminoácidos presentes e ZINC 64,47 mg/kg corretamente convertido para Zn 0,006447%. Ambos os pares PT/EN geraram os mesmos 44 campos finais. O trigo não possui Asn/Gln; esses dois campos são cobertos por casos sintéticos de importação dos 20 aminoácidos. Testes adicionais cobrem cadastro manual dos vinte campos, persistência e solver, conflito de aliases, preservação dos minerais de uma letra, leitura de energia antiga, fator dimensional 1 e expansão aditiva dos cabeçalhos. A suíte completa teve 94 testes aprovados. Exportação de PDF conferida visualmente. Nenhuma gravação Google ou publicação foi realizada na preparação.
+
+**Documentação e pacote:** funcionalidades e regras atuais em README.md e docs/CQBAL_PT_EN.md. Pacote `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip`, aplicar após P24. A reinicialização em produção acrescenta as dez colunas, sem reimportar ingredientes. Cadastros importados anteriormente com ZINC ignorado devem ser reimportados explicitamente por ID para recuperar esse valor; somente trocar o código não repara essas composições históricas.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -361,6 +377,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_persistencia_formulacao_20261026.zip` | P22 |
 | `patch_visual_login_pdf_20261026.zip` | P23 |
 | `patch_cqbal_bilingue_em_aminoacidos_20261026.zip` | P24 |
+| `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip` | P25 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

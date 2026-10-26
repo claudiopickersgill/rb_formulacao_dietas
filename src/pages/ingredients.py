@@ -187,7 +187,7 @@ def _ingredient_form(existing: dict[str, Any] | None, prefix: str) -> dict[str, 
 
         st.markdown("**Composição nutricional**")
         st.caption("Deixe vazio quando o valor for desconhecido. Não use zero para representar dado ausente.")
-        st.caption("EM em Mcal/kg. Aminoácidos em % do alimento, não da PB. Use a mesma base (seca ou natural) em todos os teores.")
+        st.caption("EM em kcal/g (1 Mcal/kg = 1 kcal/g). Aminoácidos em % do alimento, não da PB. Use a mesma base (seca ou natural) em todos os teores.")
         values: dict[str, Any] = {}
         groups: dict[str, list] = {}
         for nutrient in NUTRIENTS:

@@ -52,14 +52,14 @@ def test_preview_and_provenance_preserve_units_and_statistics():
     source = report('en')
     _, rows, _ = convert_report(source, '%')
     energy = next(r for r in rows if r['campo_base'] == 'EM')
-    assert energy['valor_na_base'] == 3.77 and energy['unidade_destino'] == 'Mcal/kg'
+    assert energy['valor_na_base'] == 3.77 and energy['unidade_destino'] == 'kcal/g'
     assert energy['valor_em_porcentagem'] is None
     assert energy['N'] == 1 and energy['S'] is None
     dry = next(r for r in rows if r['campo_base'] == 'MS')
     assert dry['N'] == 64 and dry['S'] == 1.353
     provenance = json.loads(provenance_json(source, '%', 'english.pdf'))
-    assert provenance['idioma'] == 'en' and provenance['versao_procedencia'] == 2
-    assert provenance['unidades_destino']['EM'] == 'Mcal/kg'
+    assert provenance['idioma'] == 'en' and provenance['versao_procedencia'] == 3
+    assert provenance['unidades_destino']['EM'] == 'kcal/g'
     assert provenance['unidades_destino']['Lys'] == '%'
     assert provenance['registros'] == source.records
 
@@ -87,7 +87,7 @@ def test_no_fallback_for_unvalidated_energy_or_fiber():
     for code in ['EM', 'NDT', 'FDN', 'FDA']:
         assert values[code] == 0 and code in missing
     energy = next(r for r in rows if r['campo_base'] == 'EM')
-    assert energy['unidade_destino'] == 'Mcal/kg' and energy['valor_em_porcentagem'] is None
+    assert energy['unidade_destino'] == 'kcal/g' and energy['valor_em_porcentagem'] is None
 
 
 @pytest.mark.parametrize('body', ['Lys -1 1 -', 'Lys 101 1 -'])
@@ -118,7 +118,7 @@ def test_formulation_solves_energy_and_amino_in_their_own_units(tmp_path):
     assert result.items.inclusao_calculada.tolist() == pytest.approx([50, 50])
     nutrients = result.constraints.set_index('nutriente')
     assert nutrients.loc['EM', 'resultado'] == pytest.approx(3)
-    assert nutrients.loc['EM', 'unidade'] == 'Mcal/kg'
+    assert nutrients.loc['EM', 'unidade'] == 'kcal/g'
     assert nutrients.loc['Lys', 'resultado'] == pytest.approx(1)
     assert nutrients.loc['Lys', 'unidade'] == '%'
     repo = LocalRepository(tmp_path)
@@ -130,10 +130,10 @@ def test_formulation_solves_energy_and_amino_in_their_own_units(tmp_path):
     loaded = repo.get_diet(diet_id)
     assert loaded['items'].EM.tolist() == [2, 4]
     assert loaded['items'].Lys.tolist() == [.5, 1.5]
-    assert loaded['constraints'].loc[loaded['constraints'].nutriente.eq('EM'), 'unidade'].iloc[0] == 'Mcal/kg'
+    assert loaded['constraints'].loc[loaded['constraints'].nutriente.eq('EM'), 'unidade'].iloc[0] == 'kcal/g'
     assert make_excel_bytes(loaded['metadata'], loaded['items'], loaded['constraints']).startswith(b'PK')
     with pdfplumber.open(BytesIO(make_pdf_bytes(loaded['metadata'], loaded['items'], loaded['constraints']))) as pdf:
-        assert 'Mcal/kg' in '\n'.join(page.extract_text() for page in pdf.pages)
+        assert 'kcal/g' in '\n'.join(page.extract_text() for page in pdf.pages)
 
 
 def test_google_schema_upgrade_preserves_old_columns_and_values():
@@ -183,7 +183,7 @@ if value is not None:
     saved = app.session_state['saved_payload']
     assert saved['EM'] == 3.77 and saved['Lys'] == 1.17
     assert set(AMINO_ACID_CODES) <= set(saved)
-    assert NUTRIENT_BY_CODE['EM'].unit == 'Mcal/kg' and len(NUTRIENT_CODES) == 34
+    assert NUTRIENT_BY_CODE['EM'].unit == 'kcal/g' and len(NUTRIENT_CODES) == 44
 
 
 @pytest.mark.parametrize('language', ['pt', 'en'])

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .config import NUTRIENT_CODES
+from .energy import em_to_kcal_per_g
 from .utils import as_bool, as_float, dataframe_fingerprint
 
 
@@ -55,6 +56,14 @@ def normalize_loaded_constraints(constraints: pd.DataFrame) -> pd.DataFrame:
     for column in ("minimo", "maximo", "resultado"):
         if column in normalized.columns:
             normalized[column] = normalized[column].map(lambda value: as_float(value))
+    if {"nutriente", "unidade"}.issubset(normalized.columns):
+        legacy_em = normalized["nutriente"].eq("EM") & normalized["unidade"].eq("Mcal/kg")
+        for column in ("minimo", "maximo", "resultado"):
+            if column in normalized.columns:
+                normalized.loc[legacy_em, column] = normalized.loc[legacy_em, column].map(
+                    lambda value: em_to_kcal_per_g(value) if as_float(value) is not None else None
+                )
+        normalized.loc[legacy_em, "unidade"] = "kcal/g"
     return normalized
 
 

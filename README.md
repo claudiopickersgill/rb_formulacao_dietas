@@ -51,19 +51,19 @@ Essa simulação mantém os limites de inclusão e a soma de 100%, mas flexibili
 
 ## Nutrientes e unidades
 
-O registro atual possui **34 nutrientes**: os 23 anteriores, Energia Metabolizável (EM) e dez aminoácidos. Todos são armazenados em **porcentagem**, exceto **EM em Mcal/kg**:
+O registro atual possui **44 nutrientes**: os 23 anteriores, Energia Metabolizável (EM) e os 20 aminoácidos padrão. Todos são armazenados em **porcentagem**, exceto **EM em kcal/g**:
 
 | Grupo | Nutrientes |
 |---|---|
 | Composição principal | MS, NDT, PB, FDN, FDA, EE, MM, FB e AMIDO (%) |
-| Energia | EM (Mcal/kg) |
+| Energia | EM (kcal/g) |
 | Macrominerais | Ca (`CA`), P, Mg, Na, K, Cl e S |
 | Microminerais | Fe, Cu, Mn, Zn, Co, I e Se |
-| Aminoácidos | Lisina (Lys), Metionina (Met), Treonina (Thr), Fenilalanina (Phe), Leucina (Leu), Isoleucina (Ile), Valina (Val), Histidina (His), Arginina (Arg) e Tirosina (Tyr) |
+| Aminoácidos | Lisina (Lys), Metionina (Met), Treonina (Thr), Fenilalanina (Phe), Leucina (Leu), Isoleucina (Ile), Valina (Val), Histidina (His), Arginina (Arg) Tirosina (Tyr), Alanina (Ala), Asparagina (Asn), Aspartato (Asp), Cisteína (Cys), Glicina (Gly), Glutamato (Glu), Glutamina (Gln), Prolina (Pro), Serina (Ser) e Triptofano (Trp) |
 
 EM e aminoácidos estão disponíveis no cadastro manual, na edição, no CSV, nas restrições dinâmicas, nas dietas salvas e nas exportações. Os aminoácidos representam % do alimento, não % da PB, nem oferta de aminoácidos metabolizáveis ao animal. O cadastro manual mantém campos desconhecidos em branco; a regra de zero abaixo é específica da importação CQBAL.
 
-Os limites nutricionais devem usar as mesmas unidades da composição: uma EM mínima de 3,0 significa 3,0 Mcal/kg, não 3,0%. O sistema não converte automaticamente uma dieta entre matéria natural e matéria seca: a base de expressão dos dados deve ser coerente.
+Os limites nutricionais devem usar as mesmas unidades da composição: uma EM mínima de 3,0 significa 3,0 kcal/g, não 3,0%. O sistema não converte automaticamente uma dieta entre matéria natural e matéria seca: a base de expressão dos dados deve ser coerente.
 
 ## Importação CQBAL
 
@@ -71,7 +71,7 @@ Em **Ingredientes > Importar CQBAL**:
 
 1. Envie o PDF digital do **Relatório Completo** de um único alimento, em português ou inglês. O idioma e as siglas são reconhecidos automaticamente; o nome do alimento é preservado no idioma original e pode ser editado.
 2. Confirme se os macrominerais da fonte estão em `%` ou `g/kg`.
-3. Confira a prévia, incluindo as unidades de cada campo e os zeros por ausência. Confirme aminoácidos em % do alimento e EM em Mcal/kg; o idioma não determina a unidade ou a base seca/natural.
+3. Confira a prévia, incluindo as unidades de cada campo e os zeros por ausência. Confirme aminoácidos em % do alimento e EM de origem Mcal/kg, convertida para kcal/g; o idioma não determina a unidade ou a base seca/natural.
 4. Revise nome, tipo e classificação; escolha cadastrar ou atualizar explicitamente um registro por ID.
 5. Confirme os valores e a base de expressão e salve.
 
@@ -81,12 +81,12 @@ Em **Ingredientes > Importar CQBAL**:
 |---|---|
 | MS, PB, EE, MM, FB e AMIDO | Importar em % |
 | NDT | Usar exclusivamente `NDT OBS` / `OBS TDN` |
-| EM | Importar apenas `EM_BRCORTE2016` / `ME_BRCORTE2016`, em Mcal/kg, da seção calculada |
-| Dez aminoácidos | Importar as siglas exatas em % do alimento, sem converter em % da PB |
+| EM | Importar apenas `EM_BRCORTE2016` / `ME_BRCORTE2016`, com origem Mcal/kg e conversão para kcal/g, da seção calculada |
+| Vinte aminoácidos | Importar as siglas exatas em % do alimento, sem converter em % da PB |
 | FDA e FDN | Usar somente os códigos exatos; não substituir por variantes |
 | Macrominerais em g/kg | Dividir por 10 para armazenar em % |
 | Macrominerais em % | Manter o valor |
-| Microminerais em mg/kg ou ppm | Dividir por 10.000 para armazenar em % |
+| Microminerais em mg/kg ou ppm | Dividir por 10.000 para armazenar em %; `ZINC` em inglês corresponde a `Zn` |
 | Nutriente sem informação importável | Gravar 0 e identificar o preenchimento na procedência |
 | Colunas estatísticas N e S e demais dados não mapeados | Preservar na procedência; não converter em teores da dieta |
 
@@ -96,7 +96,7 @@ Os valores antigos da base não são reconvertidos: foram considerados já expre
 
 A atualização de um ingrediente substitui sua composição: nutrientes ausentes no PDF recebem zero. Preço e demais informações existentes são preservados conforme o fluxo de atualização.
 
-O campo `cqbal_dados` guarda nome original, idioma, arquivo, hash SHA256, categoria original e normalizada, unidades de origem e por campo de destino, métodos de NDT e EM, registros reconhecidos e campos preenchidos com zero. A procedência nova usa versão 2; os JSON antigos continuam legíveis. A procedência pode ser consultada e baixada na edição do ingrediente.
+O campo `cqbal_dados` guarda nome original, idioma, arquivo, hash SHA256, categoria original e normalizada, unidades de origem e por campo de destino, métodos de NDT e EM, registros reconhecidos e campos preenchidos com zero. A procedência nova usa versão 3, com origem/destino e fator da conversão energética; os JSON antigos continuam legíveis. A procedência pode ser consultada e baixada na edição do ingrediente.
 
 A correspondência validada das siglas e os resultados dos dois relatórios de referência estão em [docs/CQBAL_PT_EN.md](docs/CQBAL_PT_EN.md). Não há estimativa local da EM a partir do NDT: importa-se a estimativa BR-CORTE 2016 que consta do relatório. Outros métodos de energia permanecem na procedência.
 
@@ -104,7 +104,11 @@ A correspondência validada das siglas e os resultados dos dois relatórios de r
 
 ### Atualização de uma base existente
 
-Ao reiniciar após esta atualização, o mecanismo de schema acrescenta `EM`, `Lys`, `Met`, `Thr`, `Phe`, `Leu`, `Ile`, `Val`, `His`, `Arg` e `Tyr` ao final de `rb_ingredientes` e `rb_dieta_ingredientes`. Não reordena cabeçalhos nem preenche os registros antigos. Não renomeie nem reposicione as colunas manualmente. Faça backup das abas antes da publicação e confira a expansão no primeiro acesso. Dietas antigas mantêm a composição histórica; reimportar um ingrediente é uma ação explícita e não atualiza suas dietas salvas.
+Ao reiniciar, o mecanismo de schema acrescenta ao final de `rb_ingredientes` e `rb_dieta_ingredientes` apenas os campos ainda ausentes. Para quem já aplicou a atualização dos dez aminoácidos, são dez novas colunas: `Ala`, `Asn`, `Asp`, `Cys`, `Gly`, `Glu`, `Gln`, `Pro`, `Ser` e `Trp`. Não reordena cabeçalhos nem preenche registros antigos. Faça backup das abas antes da publicação e confira a expansão no primeiro acesso. Dietas antigas mantêm a composição histórica; reimportar um ingrediente é uma ação explícita e não atualiza suas dietas salvas.
+
+**EM:** 1 Mcal/kg = (1.000 kcal)/(1.000 g) = 1 kcal/g. A importação faz essa conversão automaticamente, com fator 1; por exemplo, 3,21 Mcal/kg resulta em 3,21 kcal/g. Os valores antigos já armazenados em Mcal/kg permanecem numericamente corretos. Na leitura e na exportação de dietas antigas, a unidade Mcal/kg é apresentada como kcal/g sem alterar mínimos, máximos e resultados. Não há regravação retroativa das planilhas ou da procedência original.
+
+**Siglas dos aminoácidos:** o importador usa três letras (`Ala`, `Asn`, `Gln` etc.), também reconhecidas em maiúsculas. Não interpreta automaticamente letras únicas como aminoácidos, pois `P`, `S`, `K` e `I` já representam minerais. Ausentes no CQBAL continuam recebendo zero, com identificação na procedência; campos manuais desconhecidos continuam em branco.
 
 ## Qualidade dos cadastros
 

@@ -10,7 +10,7 @@ import re
 
 from .config import AMINO_ACID_CODES, NUTRIENT_BY_CODE, NUTRIENT_CODES
 from .energy import em_to_kcal_per_g
-from .cqbal_catalog import DEFAULT_CODES, FIELDS, resolve, validate_selection
+from .cqbal_catalog import DEFAULT_CODES, FIELDS, matching_codes, resolve, validate_selection
 
 MACROS = {'CA', 'P', 'Mg', 'Na', 'K', 'Cl', 'S'}
 MICROS = {'Fe', 'Cu', 'Mn', 'Zn', 'Co', 'I', 'Se'}
@@ -97,6 +97,12 @@ def parse_report_text(text: str, sha256: str = '') -> CQBALReport:
             key = (section, label)
             if key in seen:
                 if seen[key] != record:
+                    if len(matching_codes(section, label)) > 1:
+                        # A origem reutiliza siglas para atributos diferentes.
+                        # Preserva as ocorrências; a seleção decidirá se são
+                        # apenas procedência ou exigem JSON para desambiguar.
+                        records.append(record)
+                        continue
                     raise ValueError('Nutriente repetido com valores diferentes: ' + label)
                 continue
             seen[key] = record
@@ -218,12 +224,10 @@ def convert_configured_report(report: CQBALReport, macro_unit: str, policy: dict
             target = direct
         else:
             try:
-                candidates = [code for code, field in FIELDS.items()
-                              if any(s == section and a.strip().casefold() == source.strip().casefold()
-                                     for s, a in field['aliases'])]
-                if len(candidates) > 1 and any(code in selected and not FIELDS[code]['default'] for code in candidates):
+                candidates = matching_codes(section, source)
+                if len(candidates) > 1 and any(code in selected for code in candidates):
                     raise ValueError('Sigla CQBAL ambígua: ' + source + '. Use o JSON original.')
-                target = resolve(section, source)
+                target = resolve(section, source) if len(candidates) <= 1 else None
             except ValueError:
                 # Não escolhe entre aliases ingleses ambíguos nem os transforma em zero.
                 if any(code in selected and any(s == section and a.strip().casefold() == source.strip().casefold()

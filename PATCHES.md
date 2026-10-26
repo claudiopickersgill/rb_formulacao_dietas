@@ -2,7 +2,7 @@
 
 Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P26 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P27 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
@@ -369,6 +369,18 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Pacote:** patch_painel_importacao_cqbal_20261026.zip. README e documentação atualizados. Aplicar como conjunto de arquivos sobre a base indicada; preservar backups de código e abas antes de publicar.
 
+## P27 — Importação dos PDFs do Milho Fubá com siglas repetidas — 26/10/2026
+
+**Base:** 1cfac96 (Painel Importação CQBal), com P26 aplicado.
+
+**Problema:** o parser bloqueava o PDF BR em CHO A e o EN em DEE, pois a origem reutiliza essas siglas para definições distintas. A resolução sem distinguir caixa também confundia Ash (CZ) e ASH (MM).
+
+**Correção:** aliases exatos têm prioridade. Siglas repetidas de atributos distintos são preservadas na procedência e não bloqueiam itens não selecionados. Atributo selecionado sem identificação inequívoca exige JSON com IDs; não se usa valor, ordem ou referência do Milho para adivinhar. Duplicata conflitante de atributo único continua sendo rejeitada.
+
+**Validação:** 115 testes aprovados, incluindo 8 novas regressões. Conferência direta dos PDFs reais BR/EN: 230 registros reconhecidos e mesmos 44 campos importados na configuração padrão. Ash/CZ e ASH/MM permanecem separados. Sem alterações em produção.
+
+**Pacote:** patch_correcao_milho_fuba_cqbal_20261026.zip. Código alterado apenas em src/cqbal_import.py e src/cqbal_catalog.py; testes e documentação acompanham. Sem migração, novas dependências ou mudança da política salva. Reiniciar o app após aplicar.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -395,6 +407,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_cqbal_bilingue_em_aminoacidos_20261026.zip` | P24 |
 | `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip` | P25 |
 | `patch_painel_importacao_cqbal_20261026.zip` | P26 |
+| `patch_correcao_milho_fuba_cqbal_20261026.zip` | P27 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

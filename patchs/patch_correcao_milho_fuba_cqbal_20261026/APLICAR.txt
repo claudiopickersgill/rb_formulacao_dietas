@@ -1,0 +1,30 @@
+CORREÇÃO MILHO FUBÁ BR/EN — P27
+Base: 1cfac9617a3a047b68db5b7758f49cb5dd558a06 (Painel Importação CQBal; P26 aplicado).
+
+1. Faça backup dos arquivos de código atuais.
+2. Copie src/cqbal_catalog.py e src/cqbal_import.py deste pacote para os mesmos
+   caminhos no projeto. Copie também os testes, README.md, PATCHES.md e docs/
+   para manter a documentação atualizada.
+3. Publique as alterações pelo fluxo habitual e reinicie o aplicativo.
+4. Abra uma nova sessão e importe novamente o PDF do Milho Fubá BR ou EN.
+   A configuração salva de 44 campos deve funcionar nos dois idiomas.
+
+Alternativa à cópia: use git apply --check e depois git apply com o caminho
+de atualizacao.patch, a partir da raiz do projeto. Não aplique os dois métodos.
+
+O QUE MUDA
+O CQBAL repete CHO A e DEE para atributos distintos. Ocorrências não selecionadas
+são preservadas na procedência sem bloquear a importação. Ash (CZ) e ASH (MM)
+passam a ser distinguidos pela grafia exata. Se um atributo selecionado não puder
+ser identificado sem ambiguidade no PDF, será solicitado o completo.json.
+Não se escolhe um valor arbitrário nem se usa o Milho de referência para preencher
+outros alimentos. Duplicatas conflitantes de MS continuam sendo rejeitadas.
+
+VALIDAÇÃO
+115 testes aprovados. Os dois PDFs reais BR/EN do Milho Fubá foram extraídos e
+convertidos: mesmos 44 valores importados, 230 registros na procedência.
+Não há nova dependência, coluna ou migração de dados. A política do painel e a
+base de produção não foram alteradas durante a preparação.
+
+REVERSÃO
+Restaure os dois arquivos de código do backup e reinicie.

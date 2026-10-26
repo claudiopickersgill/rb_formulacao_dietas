@@ -47,6 +47,14 @@ Para reverter o código, restaure o backup. Não remova automaticamente as colun
 
 ## Validação
 
-107 testes aprovados na preparação, incluindo a seleção pelo editor administrativo, restauração do padrão, bloqueio de formulador/consulta/admin inativo, política compartilhada em Google Sheets simulado, versão desatualizada, JSON/HTML do Milho Fubá, preservação de campos desmarcados, zero para selecionados ausentes e novo teor importado, usado no solver, salvo e reaberto em dieta.
+115 testes aprovados após a correção dos PDFs do Milho Fubá, incluindo a seleção pelo editor administrativo, restauração do padrão, bloqueio de formulador/consulta/admin inativo, política compartilhada em Google Sheets simulado, versão desatualizada, JSON/HTML do Milho Fubá, preservação de campos desmarcados, zero para selecionados ausentes e novo teor importado, usado no solver, salvo e reaberto em dieta.
 
 A suíte também cobre os fluxos anteriores de minerais, aminoácidos, energia, armazenamento, autenticação e formulação. O teste de Google usa uma simulação, sem chamadas à planilha real. Não houve publicação nem validação de produção.
+
+## Correção de siglas repetidas no Milho Fubá (P27)
+
+Os PDFs reais BR/EN repetem siglas da própria origem: CHO A no português e DEE no inglês, além de outras colisões de aliases. O parser preserva essas ocorrências quando correspondem a definições distintas do catálogo. Quando desmarcadas, elas permanecem apenas na procedência e não bloqueiam os 44 campos padrão. Se selecionadas e sem identidade inequívoca, é solicitado o JSON original; o sistema não escolhe pela ordem ou pelo valor da referência.
+
+A correspondência por sigla prioriza a grafia exata: Ash pertence a CZ, enquanto ASH pertence a MM. Os dois valores não se sobrepõem. O recurso de ignorar diferenças de caixa só é usado quando não há um alias exato. Repetições conflitantes de siglas inequivocamente identificadas, como MS, continuam sendo rejeitadas.
+
+Validação: os dois PDFs reais do Milho Fubá, de 26/10/2026, produziram 230 registros de procedência e os mesmos 44 valores na configuração padrão. MM corresponde a 1,62; CZ, se selecionado, a 1,27. As oito verificações novas cobrem equivalência entre idiomas, preservação das duplicatas, colisão Ash/ASH, solicitação de JSON e rejeição de MS conflitante. Nenhuma coluna, política salva ou dado de produção foi alterado na preparação.

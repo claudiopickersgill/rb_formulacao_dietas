@@ -117,6 +117,8 @@ Em **Administração > Painel de Importação CQBAL**, somente um administrador 
 
 O catálogo distingue 144 campos compatíveis com a mistura linear (44 anteriores e 100 adicionais) dos demais parâmetros. Os teores adicionais importados tornam-se disponíveis nas restrições dinâmicas e são preservados nas dietas salvas. Frações em bases distintas, taxas, pH e unidades não validadas podem ser importados para conferência, mas precisam de modelo próprio antes de uso como restrição. Desmarcar um item altera somente as próximas importações e não apaga teores ou restrições de dietas anteriores.
 
+Nos PDFs, ocorrências de siglas reutilizadas pela origem (como `CHO A` e `DEE`) são preservadas sem bloquear campos não selecionados. A grafia exata distingue `Ash` (CZ) de `ASH` (MM). Se um atributo selecionado não puder ser identificado sem ambiguidade, o importador solicita o JSON com IDs.
+
 Cada mudança é versionada e auditada. Se a seleção mudar durante a conferência, a prévia deve ser refeita. A configuração não depende de um arquivo local temporário no servidor Streamlit.
 
 ## Qualidade dos cadastros

@@ -13,14 +13,19 @@ def normalize(value: str) -> str:
     return re.sub(r'\s+', ' ', str(value).strip()).casefold()
 
 
-def resolve(section: str, source: str) -> str | None:
+def matching_codes(section: str, source: str) -> list[str]:
+    # O CQBAL usa Ash para CZ e ASH para MM: a caixa pode distinguir campos.
+    exact = re.sub(r'\s+', ' ', str(source).strip())
     matches = [code for code, field in FIELDS.items()
-               if any(s == section and normalize(alias) == normalize(source) for s, alias in field['aliases'])]
+               if any(s == section and re.sub(r'\s+', ' ', alias.strip()) == exact
+                      for s, alias in field['aliases'])]
+    return matches or [code for code, field in FIELDS.items()
+                      if any(s == section and normalize(alias) == normalize(source) for s, alias in field['aliases'])]
+
+
+def resolve(section: str, source: str) -> str | None:
+    matches = matching_codes(section, source)
     if len(matches) > 1:
-        # Os aliases legados validados prevalecem (por exemplo ASH -> MM).
-        legacy = [code for code in matches if FIELDS[code]['default']]
-        if len(legacy) == 1:
-            return legacy[0]
         raise ValueError('Sigla CQBAL ambígua: ' + source + '. Use o JSON original com siglas em português.')
     return matches[0] if matches else None
 

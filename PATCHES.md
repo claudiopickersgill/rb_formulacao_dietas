@@ -1,8 +1,8 @@
 # RFB — Histórico consolidado de correções e patches
 
-Consolidação em **17/10/2026** dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação e uso ficam em [readme.md](readme.md).
+Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P21 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P22 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
@@ -282,6 +282,28 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Validação:** sintaxe e correspondência de ida/volta dos 23 rótulos, preservando os códigos internos. Não há alteração do schema Google.
 
+## P22 — Persistência de preço e limites na seleção de ingredientes — 26/10/2026
+
+**Base:** branch `main` do GitHub, commit `f627c44126c83aaebd1e28029f87bd75f1504b62` (Organização de arquivos).
+
+**Sintoma:** ao adicionar outro ingrediente antes de calcular, preços e limites já digitados podiam voltar aos padrões do catálogo.
+
+**Causa:** o editor de ingredientes estava dentro de um formulário, que só enviava suas alterações no cálculo. A seleção ficava fora do formulário; ao mudar, reconstruía o editor sem as alterações ainda não submetidas.
+
+**Correção:** a grade de ingredientes passa a enviar cada edição confirmada para a sessão. Callbacks do editor e da seleção reconciliam as alterações com a base estável anterior, usando `ingredient_id` e não a posição na seleção nova. A base do editor continua estável durante o preenchimento normal. As restrições nutricionais e o comando de cálculo mantêm submissão explícita pelo formulário.
+
+**Comportamento esperado:** adicionar, remover ou reordenar ingredientes preserva os valores dos que permanecem. Apenas os novos recebem o preço padrão e os limites de 0–100%. Preço zero, Sem custo e limite máximo zero são preservados. Um preço apagado não é reposto silenciosamente pelo catálogo. Um ingrediente removido e depois reinserido recebe os padrões de uma nova inclusão. Remover todos limpa a seleção corrente. Carregar outra dieta ou usar Limpar não reaplica alterações antigas.
+
+**Escopo:** valores da formulação na sessão. Não grava preços/limites no catálogo Google e não altera nutrientes, unidades, solver, exportação PDF ou login. A composição nutricional continua sendo atualizada pelo catálogo.
+
+**Arquivos:** `src/pages/formulation.py`, `tests/test_formulation_item_state.py` e `PATCHES.md`. `README.md` foi mantido sem alteração, pois esta entrega corrige um comportamento existente, sem adicionar funcionalidade.
+
+**Pacote:** `patch_persistencia_formulacao_20261026.zip`.
+
+**Validação:** 10 novos testes aprovados, incluindo teste de interface Streamlit que muda a seleção sem calcular, confirma a preservação por ID e verifica a posição do editor fora do formulário. A suíte completa executou 66 testes: 64 passaram e duas falharam. As mesmas duas falhas foram reproduzidas no código original do commit de base: os testes `test_exact_codes_and_missing` e `test_no_ndt_fallback`, em `tests/test_cqbal_import.py`, ainda esperam None para ausentes, embora a regra vigente do importador seja zero. Esses testes e o importador CQBAL não foram alterados nesta atualização.
+
+**Aplicação:** substituir o arquivo de tela no caminho exato, incluir o teste e atualizar este histórico; reiniciar/republicar. Não aplicar versões antigas de `src/pages/formulation.py` sobre esta correção. Testar com uma formulação nova após a atualização, pois edições já perdidas pela versão anterior não são recuperadas.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -303,6 +325,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_importacao_cqbal.zip` | P16, P18 e revisão P19 |
 | `patch_previa_inviabilidade.zip` | P20 |
 | `patch_nomes_restricoes.zip` | P21 |
+| `patch_persistencia_formulacao_20261026.zip` | P22 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

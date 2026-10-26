@@ -77,6 +77,7 @@ def render(repository: Repository, user: User) -> None:
         options=option_ids,
         format_func=lambda value: label_map.get(str(value), str(value)),
         key=PREFIX + "selected_ids",
+        on_change=_capture_item_editor_edits,
         placeholder="Escolha um ou mais ingredientes",
     )
     full_items = _merge_selected_items(selected_ids, catalog_index)
@@ -86,72 +87,72 @@ def render(repository: Repository, user: User) -> None:
     has_previous_result = isinstance(st.session_state.get(PREFIX + "result"), SolverResult)
     calculate_label = "Recalcular dieta" if has_previous_result else "Calcular dieta"
 
-    # Preços, limites, restrições e o comando de cálculo precisam chegar ao
-    # backend de forma atômica. Dentro de um form, Enter/Tab apenas edita a
-    # grade; os valores são enviados juntos quando o usuário clica em
-    # "Calcular dieta". Isso evita que o clique seja consumido apenas para
-    # confirmar a última célula ativa do st.data_editor.
+    # O editor de ingredientes fica fora do form para enviar cada edição
+    # confirmada antes que o usuário mude a seleção. O cálculo continua sendo
+    # submetido explicitamente, junto das restrições nutricionais.
+    if full_items.empty:
+        st.info("Selecione os ingredientes que poderão participar da mistura.")
+        edited = pd.DataFrame(columns=EDITABLE_COLUMNS)
+    else:
+        editable, items_editor_key = _items_editor_input(full_items, selected_ids)
+        edited = st.data_editor(
+            editable,
+            hide_index=True,
+            width="stretch",
+            num_rows="fixed",
+            key=items_editor_key,
+            on_change=_capture_item_editor_edits,
+            args=(items_editor_key,),
+            column_config={
+                "ingredient_id": None,
+                "nome": st.column_config.TextColumn("Ingrediente", disabled=True, width="large"),
+                "tipo": st.column_config.TextColumn("Tipo", disabled=True),
+                "classificacao": st.column_config.TextColumn("Classificação", disabled=True),
+                "sem_custo": st.column_config.CheckboxColumn(
+                    "Sem custo",
+                    help="Marque apenas quando o ingrediente realmente não tiver custo para a dieta.",
+                    default=False,
+                ),
+                "preco_kg": st.column_config.NumberColumn(
+                    "Preço (R$/kg)", min_value=0.0, step=0.01, format="R$ %.4f"
+                ),
+                "inclusao_min": st.column_config.NumberColumn(
+                    "Mínimo (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.3f"
+                ),
+                "inclusao_max": st.column_config.NumberColumn(
+                    "Máximo (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.3f"
+                ),
+            },
+        )
+        st.caption(
+            "Preço zero só é aceito quando **Sem custo** estiver marcado. "
+            "Caso contrário, o cálculo será bloqueado para evitar preço esquecido."
+        )
+
+    with st.expander("Conferir composição nutricional carregada", expanded=False):
+        preview_columns = [
+            "nome",
+            *[code for code in available_nutrient_codes(full_items) if code in full_items.columns],
+        ]
+        if full_items.empty:
+            st.caption("Selecione ingredientes para visualizar a composição enviada ao cálculo.")
+        else:
+            st.dataframe(
+                full_items[preview_columns],
+                hide_index=True,
+                width="stretch",
+            )
+            st.caption(
+                "Estes valores vêm do cadastro em rb_ingredientes e são os valores "
+                "nutricionais que serão usados pelo solver."
+            )
+
     with st.form(
         key=PREFIX + "calculation_form",
         clear_on_submit=False,
         enter_to_submit=False,
         border=False,
     ):
-        if full_items.empty:
-            st.info("Selecione os ingredientes que poderão participar da mistura.")
-            edited = pd.DataFrame(columns=EDITABLE_COLUMNS)
-        else:
-            editable, items_editor_key = _items_editor_input(full_items, selected_ids)
-            edited = st.data_editor(
-                editable,
-                hide_index=True,
-                width="stretch",
-                num_rows="fixed",
-                key=items_editor_key,
-                column_config={
-                    "ingredient_id": None,
-                    "nome": st.column_config.TextColumn("Ingrediente", disabled=True, width="large"),
-                    "tipo": st.column_config.TextColumn("Tipo", disabled=True),
-                    "classificacao": st.column_config.TextColumn("Classificação", disabled=True),
-                    "sem_custo": st.column_config.CheckboxColumn(
-                        "Sem custo",
-                        help="Marque apenas quando o ingrediente realmente não tiver custo para a dieta.",
-                        default=False,
-                    ),
-                    "preco_kg": st.column_config.NumberColumn(
-                        "Preço (R$/kg)", min_value=0.0, step=0.01, format="R$ %.4f"
-                    ),
-                    "inclusao_min": st.column_config.NumberColumn(
-                        "Mínimo (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.3f"
-                    ),
-                    "inclusao_max": st.column_config.NumberColumn(
-                        "Máximo (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.3f"
-                    ),
-                },
-            )
-            st.caption(
-                "Preço zero só é aceito quando **Sem custo** estiver marcado. "
-                "Caso contrário, o cálculo será bloqueado para evitar preço esquecido."
-            )
-
-        with st.expander("Conferir composição nutricional carregada", expanded=False):
-            preview_columns = [
-                "nome",
-                *[code for code in available_nutrient_codes(full_items) if code in full_items.columns],
-            ]
-            if full_items.empty:
-                st.caption("Selecione ingredientes para visualizar a composição enviada ao cálculo.")
-            else:
-                st.dataframe(
-                    full_items[preview_columns],
-                    hide_index=True,
-                    width="stretch",
-                )
-                st.caption(
-                    "Estes valores vêm do cadastro em rb_ingredientes e são os valores "
-                    "nutricionais que serão usados pelo solver."
-                )
-
         st.subheader("Restrições nutricionais")
         constraints_input, constraints_editor_key = _constraints_editor_input()
         if constraints_input.empty:
@@ -208,7 +209,7 @@ def render(repository: Repository, user: User) -> None:
 
     if not full_items.empty:
         full_items = _apply_edits(full_items, edited)
-        st.session_state[PREFIX + "items_full"] = full_items
+    st.session_state[PREFIX + "items_full"] = full_items
 
     constraints = constraints[["nutriente", "minimo", "maximo"]].copy().reset_index(drop=True)
     st.session_state[PREFIX + "constraints"] = constraints
@@ -267,6 +268,47 @@ def _sync_dynamic_constraints(full_items: pd.DataFrame) -> None:
         )
     elif PREFIX + "constraints" not in st.session_state:
         st.session_state[PREFIX + "constraints"] = synced
+
+
+def _capture_item_editor_edits(editor_key: str | None = None) -> None:
+    """Aplica o delta do editor antigo por ID, antes de reconstruir a seleção.
+
+    Índices de edited_rows pertencem à base estável daquele editor, não à
+    seleção nova. Só os campos da formulação são alterados; composição e
+    metadados continuam vindo do catálogo.
+    """
+    base = st.session_state.get(ITEMS_EDITOR_BASE_KEY)
+    current = st.session_state.get(PREFIX + "items_full")
+    if not isinstance(base, pd.DataFrame) or not isinstance(current, pd.DataFrame):
+        return
+    if base.empty or current.empty:
+        return
+    if editor_key is None:
+        revision = int(st.session_state.get(ITEMS_EDITOR_REVISION_KEY, 1))
+        editor_key = f"{PREFIX}items_editor_{revision}"
+    delta = st.session_state.get(editor_key, {})
+    if not isinstance(delta, dict):
+        return
+    changes_by_id = {}
+    for position, changes in delta.get("edited_rows", {}).items():
+        try:
+            position = int(position)
+        except (TypeError, ValueError):
+            continue
+        if position < 0 or position >= len(base) or not isinstance(changes, dict):
+            continue
+        ingredient_id = str(base.iloc[position]["ingredient_id"])
+        changes_by_id[ingredient_id] = {
+            field: value for field, value in changes.items()
+            if field in {"sem_custo", "preco_kg", "inclusao_min", "inclusao_max"}
+        }
+    if not changes_by_id:
+        return
+    updated = current.copy().astype(object)
+    for index, row in updated.iterrows():
+        for field, value in changes_by_id.get(str(row["ingredient_id"]), {}).items():
+            updated.at[index, field] = value
+    st.session_state[PREFIX + "items_full"] = updated
 
 
 def _items_editor_input(
@@ -369,7 +411,7 @@ def _merge_selected_items(selected_ids: list[str], catalog_index: pd.DataFrame) 
         previous_price = as_float(previous_row.get("preco_kg"))
         row["preco_kg"] = (
             previous_price
-            if previous_price is not None
+            if "preco_kg" in previous_row
             else as_float(row.get("preco_padrao"))
         )
 

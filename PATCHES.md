@@ -2,7 +2,7 @@
 
 Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
 
-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P27 são referências deste histórico, não números oficiais de versão.
+As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P28 são referências deste histórico, não números oficiais de versão.
 
 ## Regras atuais que substituem comportamentos anteriores
 
@@ -381,6 +381,18 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 
 **Pacote:** patch_correcao_milho_fuba_cqbal_20261026.zip. Código alterado apenas em src/cqbal_import.py e src/cqbal_catalog.py; testes e documentação acompanham. Sem migração, novas dependências ou mudança da política salva. Reiniciar o app após aplicar.
 
+## P28 — Aceitar relatórios Android sem título de impressão — 26/10/2026
+
+**Base:** bbc74b3 (Correção importação CQBal), após P27.
+
+**Problema:** a validação exigia CQBAL no texto da página. PDFs Android podem conter o título apenas nos metadados, sem cabeçalho/rodapé de impressão, apesar de possuírem os mesmos dados nutricionais do desktop.
+
+**Correção:** validar a estrutura nutricional sem exigir o título do navegador. Para documentos sem CQBAL no texto, exigir cabeçalho da tabela, categoria, identificação única do alimento e atributo numérico conhecido nas duas seções. Nenhum título ou valor é inserido no arquivo.
+
+**Validação:** 123 testes aprovados, com oito novas regressões. Os PDFs reais Milho - Floculadopdf.pdf e Milho - Floculadopdf2.pdf foram aceitos e produziram os mesmos 44 valores importados. Regras anteriores de aliases e duplicatas preservadas. Sem alterações na produção.
+
+**Pacote:** patch_cqbal_pdf_android_desktop_20261026.zip. Único arquivo funcional alterado: src/cqbal_import.py. Inclui testes e documentação. Sem dependências novas, migração ou mudança na configuração salva. Reiniciar o app após aplicar.
+
 ## Inventário dos pacotes documentados
 
 | Pacote | Entrada |
@@ -408,6 +420,7 @@ Zeros realmente publicados continuam distinguíveis dos zeros inseridos por aus�
 | `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip` | P25 |
 | `patch_painel_importacao_cqbal_20261026.zip` | P26 |
 | `patch_correcao_milho_fuba_cqbal_20261026.zip` | P27 |
+| `patch_cqbal_pdf_android_desktop_20261026.zip` | P28 |
 
 Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
 

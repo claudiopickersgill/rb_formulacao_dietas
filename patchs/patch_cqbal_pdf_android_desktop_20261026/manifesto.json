@@ -1,0 +1,34 @@
+{
+  "base_commit": "bbc74b35fa777fa9a3b2f96a96621864f31361be",
+  "testes": "123 passed",
+  "arquivos": [
+    {
+      "arquivo": "src/cqbal_import.py",
+      "sha256": "186ae6aa5a40328a8f90f25f370c4f174149c9a23bb0bd688335a8e48ce48010"
+    },
+    {
+      "arquivo": "tests/test_cqbal_mobile_pdf.py",
+      "sha256": "dc9b13360e07987b6dcee53a249dd29d2545267edd8c4713a27402cc7807327b"
+    },
+    {
+      "arquivo": "tests/fixtures/cqbal/flaked_maize_android.txt",
+      "sha256": "6dbaf43e6619ccb8ee9a446c8c7ac31fcca2cda53a47084fc5e97fb930e02c1f"
+    },
+    {
+      "arquivo": "tests/fixtures/cqbal/flaked_maize_desktop.txt",
+      "sha256": "e040d58766873e5b5bf991338f0b9e4509d333225007d800ef41ae9c35a97501"
+    },
+    {
+      "arquivo": "README.md",
+      "sha256": "ca3650c77afa86c411e0a2294349fec74664513207efe2adb5bb8d2843490f06"
+    },
+    {
+      "arquivo": "PATCHES.md",
+      "sha256": "10d9d3935b627d94846597f2edf385cb3631ef54e49b8cdb0fa740286ea596e7"
+    },
+    {
+      "arquivo": "docs/PAINEL_CQBAL.md",
+      "sha256": "7be1c55d9fe2437eb15a47aabaf2d6897eef5163875cc924f26c207cd068c355"
+    }
+  ]
+}

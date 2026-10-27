@@ -1,0 +1,28 @@
+CORREÇÃO CQBAL ANDROID E DESKTOP — P28
+Base: bbc74b35fa777fa9a3b2f96a96621864f31361be (Correção importação CQBal; P27 aplicado).
+
+1. Faça backup de src/cqbal_import.py.
+2. Substitua esse arquivo pelo src/cqbal_import.py do pacote, no mesmo caminho.
+   Copie também tests/, docs/, README.md e PATCHES.md para manter testes e
+   documentação atualizados.
+3. Publique pelo fluxo habitual do RFB e reinicie o aplicativo.
+4. Abra uma nova sessão e importe os PDFs do desktop e do Android. Os arquivos
+   Milho - Floculadopdf.pdf e Milho - Floculadopdf2.pdf foram aceitos no teste,
+   com os mesmos 44 valores importados na configuração padrão.
+
+Alternativa à cópia: na raiz do projeto, execute git apply --check seguido de
+git apply apontando para atualizacao.patch. Use apenas um dos métodos.
+
+O QUE MUDA
+Não é mais obrigatório encontrar CQBAL no cabeçalho/rodapé de impressão.
+Quando esse texto não existe, a validação exige a estrutura nutricional:
+cabeçalho da tabela, categoria, alimento único e dados reconhecidos nas seções
+de composição e nutrientes calculados. Não há inserção de texto ou valores.
+
+VALIDAÇÃO
+123 testes aprovados e conferência direta dos dois PDFs reais.
+Não há nova dependência, coluna, migração ou mudança da configuração do painel.
+A planilha e o aplicativo de produção não foram alterados na preparação.
+
+REVERSÃO
+Restaure src/cqbal_import.py do backup e reinicie.

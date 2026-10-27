@@ -60,8 +60,17 @@ class CQBALReport:
 def parse_report_text(text: str, sha256: str = '') -> CQBALReport:
     lines = [re.sub(r'\s+', ' ', s).strip() for s in text.splitlines() if s.strip()]
     languages = {CALCULATED_SECTIONS[s] for s in lines if s in CALCULATED_SECTIONS}
-    if 'CQBAL' not in text.upper() or not languages:
+    if not languages:
         raise ValueError('Envie o Relatório Completo digital do CQBAL, com Nutrientes Calculados / Estimated Nutrients.')
+    # Android pode omitir cabeçalho/rodapé de impressão. O título CQBAL
+    # nesses adornos não é obrigatório quando a estrutura da tabela existe.
+    without_print_title = 'CQBAL' not in text.upper()
+    if without_print_title and not any(
+        'NUTRIENT' in line.upper() and
+        any(word in line.upper() for word in ('MÉDIA', 'MEDIA', 'MEAN', 'AVERAGE'))
+        for line in lines
+    ):
+        raise ValueError('Estrutura da tabela CQBAL não reconhecida. Envie o Relatório Completo digital.')
     categories = [s for s in lines if s.upper() in CATEGORY_ALIASES]
     if not categories:
         raise ValueError('Categoria do alimento não reconhecida no PDF.')
@@ -109,6 +118,12 @@ def parse_report_text(text: str, sha256: str = '') -> CQBALReport:
             records.append(record)
     if not records or not any(r['secao'] == 'Composição' for r in records):
         raise ValueError('Nenhuma tabela de composição reconhecida. PDFs digitalizados não são aceitos.')
+    if without_print_title and not all(
+        any(record['secao'] == section and record['media'] is not None and
+            matching_codes(section, record['nutriente']) for record in records)
+        for section in ('Composição', 'Calculados')
+    ):
+        raise ValueError('Relatório incompleto: confira as tabelas de composição e nutrientes calculados do CQBAL.')
     canonical_categories = {CATEGORY_ALIASES[c.upper()] for c in categories}
     if len(canonical_categories) != 1:
         raise ValueError('O PDF contém categorias incompatíveis; envie um único alimento.')

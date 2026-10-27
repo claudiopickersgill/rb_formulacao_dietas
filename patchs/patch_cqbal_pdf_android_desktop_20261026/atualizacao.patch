@@ -1,0 +1,223 @@
+--- a/src/cqbal_import.py
++++ b/src/cqbal_import.py
+@@ -60,8 +60,17 @@
+ def parse_report_text(text: str, sha256: str = '') -> CQBALReport:
+     lines = [re.sub(r'\s+', ' ', s).strip() for s in text.splitlines() if s.strip()]
+     languages = {CALCULATED_SECTIONS[s] for s in lines if s in CALCULATED_SECTIONS}
+-    if 'CQBAL' not in text.upper() or not languages:
++    if not languages:
+         raise ValueError('Envie o Relatório Completo digital do CQBAL, com Nutrientes Calculados / Estimated Nutrients.')
++    # Android pode omitir cabeçalho/rodapé de impressão. O título CQBAL
++    # nesses adornos não é obrigatório quando a estrutura da tabela existe.
++    without_print_title = 'CQBAL' not in text.upper()
++    if without_print_title and not any(
++        'NUTRIENT' in line.upper() and
++        any(word in line.upper() for word in ('MÉDIA', 'MEDIA', 'MEAN', 'AVERAGE'))
++        for line in lines
++    ):
++        raise ValueError('Estrutura da tabela CQBAL não reconhecida. Envie o Relatório Completo digital.')
+     categories = [s for s in lines if s.upper() in CATEGORY_ALIASES]
+     if not categories:
+         raise ValueError('Categoria do alimento não reconhecida no PDF.')
+@@ -109,6 +118,12 @@
+             records.append(record)
+     if not records or not any(r['secao'] == 'Composição' for r in records):
+         raise ValueError('Nenhuma tabela de composição reconhecida. PDFs digitalizados não são aceitos.')
++    if without_print_title and not all(
++        any(record['secao'] == section and record['media'] is not None and
++            matching_codes(section, record['nutriente']) for record in records)
++        for section in ('Composição', 'Calculados')
++    ):
++        raise ValueError('Relatório incompleto: confira as tabelas de composição e nutrientes calculados do CQBAL.')
+     canonical_categories = {CATEGORY_ALIASES[c.upper()] for c in categories}
+     if len(canonical_categories) != 1:
+         raise ValueError('O PDF contém categorias incompatíveis; envie um único alimento.')
+--- /dev/null
++++ b/tests/test_cqbal_mobile_pdf.py
+@@ -0,0 +1,48 @@
++from pathlib import Path
++
++import pytest
++
++from src.cqbal_catalog import default_policy
++from src.cqbal_import import parse_report_text, convert_configured_report
++
++FIXTURES = Path(__file__).parent / 'fixtures' / 'cqbal'
++
++
++def source(name):
++    return (FIXTURES / f'flaked_maize_{name}.txt').read_text(encoding='utf8')
++
++
++def test_android_without_print_title_matches_desktop():
++    text=source('android')
++    assert 'CQBAL' not in text.upper()
++    mobile=parse_report_text(text)
++    desktop=parse_report_text(source('desktop'))
++    assert mobile.name==desktop.name=='MILHO FLOCULADO'
++    left=convert_configured_report(mobile,'%',default_policy())
++    right=convert_configured_report(desktop,'%',default_policy())
++    assert left[0]==right[0] and left[2]==right[2]
++    assert left[0]['MS']==88.23 and left[0]['PB']==8.48 and left[0]['EM']==3.25
++
++
++def test_android_english_structure_without_cqbal_marker():
++    text=source('android').replace('CONCENTRADOS ENERGÉTICOS','ENERGY CONCENTRATE')
++    text=text.replace('Derivados','Derivatives').replace('Nutrientes Calculados','Estimated Nutrients')
++    text=text.replace('NUTRIENTE','NUTRIENT').replace('MÉDIA','AVERAGE')
++    report=parse_report_text(text)
++    assert report.language=='en'
++    assert convert_configured_report(report,'%',default_policy())[0]['MS']==88.23
++
++
++@pytest.mark.parametrize('missing', ['category','name','header','composition','calculated_values','calculated_title'])
++def test_missing_print_title_does_not_bypass_structure_validation(missing):
++    text=source('android')
++    if missing=='category': text=text.replace('CONCENTRADOS ENERGÉTICOS','OUTRA CATEGORIA')
++    if missing=='name': text=text.replace('Derivados','')
++    if missing=='header':
++        text='\n'.join(line for line in text.splitlines() if 'NUTRIENTE' not in line)
++    if missing=='composition':
++        start=text.index('MS 88.23');end=text.index('Nutrientes Calculados')
++        text=text[:start]+text[end:]
++    if missing=='calculated_values': text=text[:text.index('EEvD_BRCORTE2016')]
++    if missing=='calculated_title': text=text.replace('Nutrientes Calculados','')
++    with pytest.raises(ValueError): parse_report_text(text)
+--- /dev/null
++++ b/tests/fixtures/cqbal/flaked_maize_android.txt
+@@ -0,0 +1,32 @@
++Voltar Salvar no BR-Corte 5.0 Gerar PDF
++CONCENTRADOS ENERGÉTICOS
++MILHO
++Zea mays L.
++MILHO FLOCULADO
++Derivados
++Pesquisar:
++NUTRIENTE ▲ ▼ MÉDIA ▲ ▼ N ▲ ▼ S ▲ ▼ NUTRIENTE ▲ ▼ MÉDIA ▲ ▼ N ▲ ▼ S ▲ ▼
++MS 88.23 8 1.72 MO 98.87 3 0.92
++PB 8.48 9 0.799 EE 2.81 7 0.899
++MM 0.98 6 0.691 FB 2.50 1 -
++FDN 11.34 8 1.724 CNF 76.22 1 -
++AMIDO 73.93 3 3.115 FDA 3.52 8 1.012
++LIGNINA 0.88 4 0.876 PDR/PB 43.04 1 -
++MS A 21.50 1 - MS B 77.80 1 -
++MS kd 5.56 1 - Ca 0.03 1 -
++P 0.28 1 - - - - -
++Nutrientes Calculados
++NUTRIENTE MÉDIA N S NUTRIENTE MÉDIA N S
++EEvD_BRCORTE2016 2.42 1 - CNFvD_BRCORTE2016 72.44 1 -
++CNF_CALC_BRCORTE2016 76.25 1 - FDNpd_BRCORTE2016 10.10 1 -
++FDND_BRCORTE2016 8.47 1 - PBvD_BRCORTE2016 8.05 1 -
++NDT_BRCORTE2016 87.26 1 - ED_BRCORTE2016 3.75 1 -
++EM_BRCORTE2016 3.25 1 - EEDGCm_BRCORTE2010 2.33 1 -
++EEDGCv_BRCORTE2010 2.24 1 - EEDGLm_BRCORTE2010 2.32 1 -
++EEDGLv_BRCORTE2010 2.21 1 - CNFDGCm_BRCORTE2010 69.09 1 -
++CNFDGCv_BRCORTE2010 67.33 1 - CNFDGLm_BRCORTE2010 68.39 1 -
++CNFDGLv_BRCORTE2010 66.72 1 - FDNDGCm_BRCORTE2010 8.16 1 -
++FDNDGCv_BRCORTE2010 7.78 1 - FDNDGLm_BRCORTE2010 6.58 1 -
++FDNDGLv_BRCORTE2010 6.21 1 - EED_NRC 1.81 1 -
++CNFD_NRC 74.73 1 - FDNDcp_NRC 6.42 1 -
++FDND_NRC 6.42 1 - - - - -
+\ No newline at end of file
+--- /dev/null
++++ b/tests/fixtures/cqbal/flaked_maize_desktop.txt
+@@ -0,0 +1,35 @@
++26/10/2026, 20:33 CQBAL 4.0
++Voltar Salvar no BR-Corte 5.0 Gerar PDF
++CONCENTRADOS ENERGÉTICOS
++MILHO
++Zea mays L.
++MILHO FLOCULADO
++Derivados
++Pesquisar:
++NUTRIENTE ▲ MÉDIA ▲ N ▲ S ▲ NUTRIENTE ▲ MÉDIA ▲ N ▲ S ▲
++▼ ▼ ▼ ▼ ▼ ▼ ▼ ▼
++DM 88.23 8 1.72 MO 98.87 3 0.92
++CP 8.48 9 0.799 EE 2.81 7 0.899
++ASH 0.98 6 0.691 FB 2.50 1 -
++NDF 11.34 8 1.724 CNF 76.22 1 -
++STARCH 73.93 3 3.115 FDA 3.52 8 1.012
++LIGNIN 0.88 4 0.876 PDR/PB 43.04 1 -
++DM A 21.50 1 - MS B 77.80 1 -
++DM kd 5.56 1 - Ca 0.03 1 -
++P 0.28 1 - undefined - - -
++Nutrientes Calculados
++NUTRIENTE MÉDIA N S NUTRIENTE MÉDIA N S
++tdEE_BRCORTE2016 2.42 1 - CNFvD_BRCORTE2016 72.44 1 -
++CNF_CALC_BRCORTE2016 76.25 1 - FDNpd_BRCORTE2016 10.10 1 -
++dNDF_BRCORTE2016 8.47 1 - PBvD_BRCORTE2016 8.05 1 -
++TDN_BRCORTE2016 87.26 1 - ED_BRCORTE2016 3.75 1 -
++ME_BRCORTE2016 3.25 1 - EEDGCm_BRCORTE2010 2.33 1 -
++DEEBCa_BRCORTE2010 2.24 1 - EEDGLm_BRCORTE2010 2.32 1 -
++DEEDCa_BRCORTE2010 2.21 1 - CNFDGCm_BRCORTE2010 69.09 1 -
++DNFCa_BRCORTE2010 67.33 1 - CNFDGLm_BRCORTE2010 68.39 1 -
++DNFCDCa_BRCORTE2010 66.72 1 - FDNDGCm_BRCORTE2010 8.16 1 -
++DNDFBCa_BRCORTE2010 7.78 1 - FDNDGLm_BRCORTE2010 6.58 1 -
++DNDFDCa_BRCORTE2010 6.21 1 - EED_NRC 1.81 1 -
++DNFC_NRC 74.73 1 - FDNDcp_NRC 6.42 1 -
++DNDF_NRC 6.42 1 - undefined - - -
++https://www.cqbal.com.br/#!/gerarelatorio/?data=eyJ0aXR1bG8iOiJDT05DRU5UUkFET1MgRU5FUkfDiVRJQ09TIiwic3VidGl0dWxvMSI6Ik1JTEh… 1/1
+\ No newline at end of file
+--- a/README.md
++++ b/README.md
+@@ -118,6 +118,8 @@
+ O catálogo distingue 144 campos compatíveis com a mistura linear (44 anteriores e 100 adicionais) dos demais parâmetros. Os teores adicionais importados tornam-se disponíveis nas restrições dinâmicas e são preservados nas dietas salvas. Frações em bases distintas, taxas, pH e unidades não validadas podem ser importados para conferência, mas precisam de modelo próprio antes de uso como restrição. Desmarcar um item altera somente as próximas importações e não apaga teores ou restrições de dietas anteriores.
+ 
+ Nos PDFs, ocorrências de siglas reutilizadas pela origem (como `CHO A` e `DEE`) são preservadas sem bloquear campos não selecionados. A grafia exata distingue `Ash` (CZ) de `ASH` (MM). Se um atributo selecionado não puder ser identificado sem ambiguidade, o importador solicita o JSON com IDs.
++
++PDFs gerados no Android sem cabeçalho ou rodapé de impressão também são aceitos. A validação usa categoria, identificação do alimento, cabeçalho de tabela e as seções de composição e nutrientes calculados; não exige a palavra CQBAL no texto de impressão.
+ 
+ Cada mudança é versionada e auditada. Se a seleção mudar durante a conferência, a prévia deve ser refeita. A configuração não depende de um arquivo local temporário no servidor Streamlit.
+ 
+--- a/PATCHES.md
++++ b/PATCHES.md
+@@ -2,7 +2,7 @@
+ 
+ Consolidação inicial em **17/10/2026**, atualizada em **26/10/2026**, dos documentos de correção do projeto, pacotes arquivados e entregas desta conversa. Informações gerais, instalação, uso e novas funcionalidades ficam em [README.md](README.md). Correções e atualizações são registradas neste `PATCHES.md`.
+ 
+-As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P27 são referências deste histórico, não números oficiais de versão.
++As entradas abaixo seguem a evolução funcional. Quando a data exata de uma entrega antiga não está documentada, ela não foi inferida. Os identificadores P01–P28 são referências deste histórico, não números oficiais de versão.
+ 
+ ## Regras atuais que substituem comportamentos anteriores
+ 
+@@ -380,6 +380,18 @@
+ **Validação:** 115 testes aprovados, incluindo 8 novas regressões. Conferência direta dos PDFs reais BR/EN: 230 registros reconhecidos e mesmos 44 campos importados na configuração padrão. Ash/CZ e ASH/MM permanecem separados. Sem alterações em produção.
+ 
+ **Pacote:** patch_correcao_milho_fuba_cqbal_20261026.zip. Código alterado apenas em src/cqbal_import.py e src/cqbal_catalog.py; testes e documentação acompanham. Sem migração, novas dependências ou mudança da política salva. Reiniciar o app após aplicar.
++
++## P28 — Aceitar relatórios Android sem título de impressão — 26/10/2026
++
++**Base:** bbc74b3 (Correção importação CQBal), após P27.
++
++**Problema:** a validação exigia CQBAL no texto da página. PDFs Android podem conter o título apenas nos metadados, sem cabeçalho/rodapé de impressão, apesar de possuírem os mesmos dados nutricionais do desktop.
++
++**Correção:** validar a estrutura nutricional sem exigir o título do navegador. Para documentos sem CQBAL no texto, exigir cabeçalho da tabela, categoria, identificação única do alimento e atributo numérico conhecido nas duas seções. Nenhum título ou valor é inserido no arquivo.
++
++**Validação:** 123 testes aprovados, com oito novas regressões. Os PDFs reais Milho - Floculadopdf.pdf e Milho - Floculadopdf2.pdf foram aceitos e produziram os mesmos 44 valores importados. Regras anteriores de aliases e duplicatas preservadas. Sem alterações na produção.
++
++**Pacote:** patch_cqbal_pdf_android_desktop_20261026.zip. Único arquivo funcional alterado: src/cqbal_import.py. Inclui testes e documentação. Sem dependências novas, migração ou mudança na configuração salva. Reiniciar o app após aplicar.
+ 
+ ## Inventário dos pacotes documentados
+ 
+@@ -408,6 +420,7 @@
+ | `patch_zinc_em_kcalg_20_aminoacidos_20261026.zip` | P25 |
+ | `patch_painel_importacao_cqbal_20261026.zip` | P26 |
+ | `patch_correcao_milho_fuba_cqbal_20261026.zip` | P27 |
++| `patch_cqbal_pdf_android_desktop_20261026.zip` | P28 |
+ 
+ Os arquivos originais de integração e entrega do MVP também foram considerados na consolidação, mesmo sem um ZIP separado nesta lista.
+ 
+--- a/docs/PAINEL_CQBAL.md
++++ b/docs/PAINEL_CQBAL.md
+@@ -58,3 +58,11 @@
+ A correspondência por sigla prioriza a grafia exata: Ash pertence a CZ, enquanto ASH pertence a MM. Os dois valores não se sobrepõem. O recurso de ignorar diferenças de caixa só é usado quando não há um alias exato. Repetições conflitantes de siglas inequivocamente identificadas, como MS, continuam sendo rejeitadas.
+ 
+ Validação: os dois PDFs reais do Milho Fubá, de 26/10/2026, produziram 230 registros de procedência e os mesmos 44 valores na configuração padrão. MM corresponde a 1,62; CZ, se selecionado, a 1,27. As oito verificações novas cobrem equivalência entre idiomas, preservação das duplicatas, colisão Ash/ASH, solicitação de JSON e rejeição de MS conflitante. Nenhuma coluna, política salva ou dado de produção foi alterado na preparação.
++
++## Impressão por Android e desktop (P28)
++
++O identificador CQBAL no cabeçalho ou rodapé de impressão não é obrigatório. O PDF gerado no Android pode manter esse título somente nos metadados, sem texto correspondente na página. Quando o texto não inclui CQBAL, o importador exige cabeçalho da tabela nutricional, categoria reconhecida, nome único identificado por Derivados/Derivatives e ao menos um atributo numérico conhecido em cada seção (composição e calculados).
++
++As regras anteriores de duplicidade, aliases, conversão, seleção administrativa e preenchimento de ausentes permanecem. A validação estrutural não adiciona título ou valores ao arquivo enviado. PDFs digitalizados sem texto continuam fora do escopo.
++
++Validação desta atualização: 123 testes aprovados. Conferência direta dos arquivos reais Milho - Floculadopdf.pdf (Windows) e Milho - Floculadopdf2.pdf (Android): ambos aceitos e mesmos 44 valores na configuração padrão. As oito regressões novas cobrem a equivalência desktop/Android, cabeçalhos ingleses e rejeição de estruturas incompletas. Sem alteração na planilha de produção.

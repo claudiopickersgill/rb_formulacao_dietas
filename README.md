@@ -119,6 +119,8 @@ O catálogo distingue 144 campos compatíveis com a mistura linear (44 anteriore
 
 Nos PDFs, ocorrências de siglas reutilizadas pela origem (como `CHO A` e `DEE`) são preservadas sem bloquear campos não selecionados. A grafia exata distingue `Ash` (CZ) de `ASH` (MM). Se um atributo selecionado não puder ser identificado sem ambiguidade, o importador solicita o JSON com IDs.
 
+PDFs gerados no Android sem cabeçalho ou rodapé de impressão também são aceitos. A validação usa categoria, identificação do alimento, cabeçalho de tabela e as seções de composição e nutrientes calculados; não exige a palavra CQBAL no texto de impressão.
+
 Cada mudança é versionada e auditada. Se a seleção mudar durante a conferência, a prévia deve ser refeita. A configuração não depende de um arquivo local temporário no servidor Streamlit.
 
 ## Qualidade dos cadastros

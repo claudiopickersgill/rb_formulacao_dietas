@@ -58,3 +58,11 @@ Os PDFs reais BR/EN repetem siglas da própria origem: CHO A no português e DEE
 A correspondência por sigla prioriza a grafia exata: Ash pertence a CZ, enquanto ASH pertence a MM. Os dois valores não se sobrepõem. O recurso de ignorar diferenças de caixa só é usado quando não há um alias exato. Repetições conflitantes de siglas inequivocamente identificadas, como MS, continuam sendo rejeitadas.
 
 Validação: os dois PDFs reais do Milho Fubá, de 26/10/2026, produziram 230 registros de procedência e os mesmos 44 valores na configuração padrão. MM corresponde a 1,62; CZ, se selecionado, a 1,27. As oito verificações novas cobrem equivalência entre idiomas, preservação das duplicatas, colisão Ash/ASH, solicitação de JSON e rejeição de MS conflitante. Nenhuma coluna, política salva ou dado de produção foi alterado na preparação.
+
+## Impressão por Android e desktop (P28)
+
+O identificador CQBAL no cabeçalho ou rodapé de impressão não é obrigatório. O PDF gerado no Android pode manter esse título somente nos metadados, sem texto correspondente na página. Quando o texto não inclui CQBAL, o importador exige cabeçalho da tabela nutricional, categoria reconhecida, nome único identificado por Derivados/Derivatives e ao menos um atributo numérico conhecido em cada seção (composição e calculados).
+
+As regras anteriores de duplicidade, aliases, conversão, seleção administrativa e preenchimento de ausentes permanecem. A validação estrutural não adiciona título ou valores ao arquivo enviado. PDFs digitalizados sem texto continuam fora do escopo.
+
+Validação desta atualização: 123 testes aprovados. Conferência direta dos arquivos reais Milho - Floculadopdf.pdf (Windows) e Milho - Floculadopdf2.pdf (Android): ambos aceitos e mesmos 44 valores na configuração padrão. As oito regressões novas cobrem a equivalência desktop/Android, cabeçalhos ingleses e rejeição de estruturas incompletas. Sem alteração na planilha de produção.
